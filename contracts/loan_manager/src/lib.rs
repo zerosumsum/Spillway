@@ -3,7 +3,7 @@ use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
 
 mod nft {
     soroban_sdk::contractimport!(
-        file = "/Users/ogazboiz/code /hackathon/remitlend/contracts/target/wasm32-unknown-unknown/release/remittance_nft.wasm"
+        file = "../target/wasm32-unknown-unknown/release/remittance_nft.wasm"
     );
 }
 

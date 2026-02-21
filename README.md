@@ -1,57 +1,45 @@
 # RemitLend
 
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+[![Frontend: Next.js](https://img.shields.io/badge/Frontend-Next.js-black?logo=next.js)](https://nextjs.org/)
+[![Backend: Express](https://img.shields.io/badge/Backend-Express.js-white?logo=express)](https://expressjs.com/)
+[![Smart Contracts: Soroban](https://img.shields.io/badge/Smart_Contracts-Soroban-orange)](https://soroban.stellar.org/)
 [![Stellar](https://img.shields.io/badge/Stellar-Soroban-purple)](https://stellar.org)
 
-RemitLend treats remittance history as credit history. Migrant workers prove reliability through monthly transfers, allowing them to receive fair loans without predatory fees. Lenders earn transparent yield on the Stellar testnet.
-
-## 🚀 Vision
-
-Migrant workers often lack traditional credit history in host countries, forcing them towards high-interest payday loans. RemitLend bridges this gap by turning consistent remittance records into an on-chain reliability score, unlocking access to affordable capital.
+RemitLend treats remittance history as credit history. Migrant workers prove their financial reliability through monthly cross-border transfers, allowing them to receive fair loans without predatory fees. In return, lenders earn transparent yield powered by the Stellar network.
 
 ## ✨ Key Features
 
-- **Credit Scoring via Remittances**: Transform remittance history into verifiable on-chain credit scores
-- **NFT-Based Collateral**: Remittance NFTs serve as proof of reliability and loan collateral
-- **Decentralized Lending Pools**: Lenders provide liquidity and earn transparent yields
-- **Non-Custodial**: Users maintain full control of their funds through Stellar wallets
-- **Transparent & Auditable**: All transactions and loan terms recorded on-chain
+### For Borrowers
+- **Credit Building**: Convert your existing remittance history into an actionable credit score.
+- **Fair Rates**: Access loans with transparent, non-predatory interest rates.
+- **Self-Custody**: Maintain full control of your assets using Stellar wallets.
+
+### For Lenders
+- **Transparent Yield**: Earn interest by providing liquidity to audited borrowing pools.
+- **Risk Assessment**: Make informed decisions based on verifiable, on-chain remittance proofs (Remittance NFTs).
+
+### Technical Highlights
+- **NFT-Based Collateral**: Remittance NFTs serve as proof of reliability and loan collateral.
+- **Decentralized Lending Pools**: Lenders provide liquidity and earn transparent yields.
+- **Transparent & Auditable**: All transactions and loan terms recorded on-chain.
 
 ## 🏗 Project Structure
 
-The repository is organized as a monorepo containing the following components:
+The repository is organized as a monorepo containing three core packages:
 
-- **`backend/`**: Express.js server providing API support and metadata management.
-- **`frontend/`**: Next.js web application for borrowers and lenders.
-- **`contracts/`**: Soroban (Rust) smart contracts covering loans, pools, and NFTs.
+- **`backend/`**: Node.js/Express server providing API support, score generation, and metadata management.
+- **`frontend/`**: Next.js web application providing the UI for both borrowers and lenders.
+- **`contracts/`**: Soroban (Rust) smart contracts covering the lending pools, loan management, and NFT collateral logic.
+
+*For a detailed look at how these components interact, see our [Architecture Diagram](ARCHITECTURE.md).*
 
 ## 🛠 Tech Stack
 
-- **Blockchain**: [Stellar](https://stellar.org) (Soroban)
-- **Frontend**: Next.js, TypeScript, Tailwind CSS
-- **Backend**: Node.js, Express, TypeScript
-- **Wallet**: [Stellar Wallet Kit](https://github.com/stellar/stellar-wallet-kit) (Freighter, etc.)
-
-## 📐 Architecture
-
-The following diagram illustrates the high-level interaction between RemitLend components:
-
-```mermaid
-graph TD
-    User([User/Borrower]) <--> Frontend[Next.js Frontend]
-    Frontend <--> Backend[Express Backend]
-    Frontend <--> Stellar[Stellar/Soroban Network]
-    
-    subgraph "Soroban Smart Contracts"
-        NFT[Remittance NFT]
-        LM[Loan Manager]
-        LP[Lending Pool]
-    end
-    
-    Stellar --- NFT
-    Stellar --- LM
-    Stellar --- LP
-```
+- **Blockchain**: [Stellar](https://stellar.org) (Soroban Smart Contracts)
+- **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS
+- **Backend**: Node.js, Express, TypeScript, Jest
+- **Wallet Integration**: [Stellar Wallet Kit](https://github.com/stellar/stellar-wallet-kit) (Freighter)
 
 ## 🏁 Getting Started
 
@@ -59,7 +47,7 @@ graph TD
 
 - [Node.js](https://nodejs.org/) (v18 or higher)
 - [npm](https://www.npmjs.com/) or [yarn](https://yarnpkg.com/)
-- [Docker](https://www.docker.com/) (Optional, recommended for easy setup)
+- [Docker & Docker Compose](https://www.docker.com/) (Recommended for easy setup)
 - [Rust & Cargo](https://rustup.rs/) (Required for contract development)
 - [Soroban CLI](https://soroban.stellar.org/docs/getting-started/setup) (Required for contract deployment)
 - [Stellar Wallet](https://www.stellar.org/ecosystem/wallets) (Freighter recommended for testing)
@@ -68,7 +56,7 @@ graph TD
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-repo/remitlend.git
+   git clone https://github.com/your-username/remitlend.git
    cd remitlend
    ```
 
@@ -110,6 +98,32 @@ graph TD
    ```env
    CORS_ALLOWED_ORIGINS=http://localhost:3000
    PORT=3001
+   NODE_ENV=development
+   ```
+
+### Manual Setup
+
+#### Backend Setup
+
+1. **Navigate to backend directory:**
+   ```bash
+   cd backend
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Configure environment:**
+   ```bash
+   cp .env.example .env
+   ```
+   Update `.env` with your configuration:
+   ```env
+   CORS_ALLOWED_ORIGINS=http://localhost:3000
+   PORT=3001
+   NODE_ENV=development
    ```
 
 4. **Run development server:**
@@ -199,82 +213,8 @@ We welcome contributions from developers of all skill levels! Please see our [CO
 4. Push to your branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📚 Documentation
-
-- [Architecture Overview](ARCHITECTURE.md) - System design and component interactions
-- [Contributing Guide](CONTRIBUTING.md) - How to contribute to the project
-- [Backend API Docs](http://localhost:3001/api-docs) - Swagger/OpenAPI documentation (when running locally)
-- [Soroban Documentation](https://soroban.stellar.org/docs) - Smart contract platform docs
-
-## 🧪 Testing
-
-### Backend Tests
-```bash
-cd backend
-npm test
-```
-
-### Contract Tests
-```bash
-cd contracts
-cargo test
-```
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**Port already in use:**
-```bash
-# Kill process on port 3000 or 3001
-lsof -ti:3000 | xargs kill -9
-lsof -ti:3001 | xargs kill -9
-```
-
-**Docker build fails:**
-```bash
-# Clean Docker cache and rebuild
-docker compose down -v
-docker system prune -a
-docker compose up --build
-```
-
-**Contract build errors:**
-```bash
-# Ensure wasm32 target is installed
-rustup target add wasm32-unknown-unknown
-```
-
-**Wallet connection issues:**
-- Ensure you have Freighter or another Stellar wallet installed
-- Switch to Stellar Testnet in your wallet settings
-- Get testnet XLM from the [Stellar Laboratory](https://laboratory.stellar.org/#account-creator)
-
-## 🗺️ Roadmap
-
-- [ ] Integration with real remittance APIs (Wise, Western Union)
-- [ ] Mobile application (React Native)
-- [ ] Multi-currency support
-- [ ] Automated loan approval based on risk scoring
-- [ ] Governance token for protocol decisions
-- [ ] Mainnet deployment
+### Quick Contribution Guide
 
 ## 📄 License
 
-This project is licensed under the ISC License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- Built on [Stellar](https://stellar.org) blockchain
-- Powered by [Soroban](https://soroban.stellar.org/) smart contracts
-- Inspired by the need for financial inclusion for migrant workers worldwide
-
-## 📞 Support
-
-- Open an [issue](https://github.com/your-repo/remitlend/issues) for bug reports or feature requests
-- Join our community discussions
-- Follow the project for updates
-
----
-
-Made with ❤️ for migrant workers worldwide
+This project is licensed under the ISC License. See the `LICENSE` file for details.

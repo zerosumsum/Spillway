@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { QueryProvider } from "@/app/components/providers/QueryProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,12 +15,21 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "RemitLend - Borderless P2P Lending & Remittance",
-  description: "Global peer-to-peer lending and instant remittances powered by blockchain technology. Send money and grow your wealth across borders.",
-  keywords: ["P2P Lending", "Remittance", "Blockchain", "DeFi", "Global Payments", "Borderless Finance"],
+  description:
+    "Global peer-to-peer lending and instant remittances powered by blockchain technology. Send money and grow your wealth across borders.",
+  keywords: [
+    "P2P Lending",
+    "Remittance",
+    "Blockchain",
+    "DeFi",
+    "Global Payments",
+    "Borderless Finance",
+  ],
   authors: [{ name: "RemitLend Team" }],
   openGraph: {
     title: "RemitLend - Borderless P2P Lending & Remittance",
-    description: "Global peer-to-peer lending and instant remittances powered by blockchain technology. Send money and grow your wealth across borders.",
+    description:
+      "Global peer-to-peer lending and instant remittances powered by blockchain technology. Send money and grow your wealth across borders.",
     url: "https://remitlend.com",
     siteName: "RemitLend",
     images: [
@@ -36,7 +46,8 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "RemitLend - Borderless P2P Lending & Remittance",
-    description: "Global peer-to-peer lending and instant remittances powered by blockchain technology. Send money and grow your wealth across borders.",
+    description:
+      "Global peer-to-peer lending and instant remittances powered by blockchain technology. Send money and grow your wealth across borders.",
     images: ["/og-image.png"],
     creator: "@remitlend",
   },
@@ -53,7 +64,8 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        {/* QueryProvider wraps the entire app so any component can use React Query hooks */}
+        <QueryProvider>{children}</QueryProvider>
       </body>
     </html>
   );

@@ -247,8 +247,8 @@ export function WalletProvider({ children }: WalletProviderProps) {
       throw new Error(normalizeWalletError(result.error));
     }
 
-    if (result.signedTransaction) {
-      return result.signedTransaction;
+    if (result.signedTxXdr) {
+      return result.signedTxXdr;
     }
 
     throw new Error("Signing failed: No signed transaction returned.");

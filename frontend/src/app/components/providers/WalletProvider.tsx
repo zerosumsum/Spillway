@@ -233,8 +233,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
   async function signTransaction(unsignedTxXdr: string): Promise<string> {
     const api = await loadFreighterApi();
     const networkName = useWalletStore.getState().network?.name ?? "TESTNET";
-    const networkPassphrase =
-      NETWORK_PASSPHRASES[networkName] ?? NETWORK_PASSPHRASES.TESTNET;
+    const networkPassphrase = NETWORK_PASSPHRASES[networkName] ?? NETWORK_PASSPHRASES.TESTNET;
 
     const result = await api.signTransaction(unsignedTxXdr, {
       networkPassphrase,

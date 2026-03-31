@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   SendHorizontal,
   Filter,
-  Search,
   CheckCircle2,
   Clock,
   XCircle,
@@ -12,19 +11,19 @@ import {
   TrendingUp,
   Calendar,
   DollarSign,
+  Search,
 } from "lucide-react";
 import {
   useWalletStore,
   selectIsWalletConnected,
   selectWalletAddress,
 } from "../../stores/useWalletStore";
-import { useRemittances, type Remittance } from "../../hooks/useApi";
+import { useRemittancesPage, type Remittance } from "../../hooks/useApi";
 import { Card, CardHeader, CardTitle, CardContent } from "../../components/ui/Card";
 import { ErrorBoundary } from "../../components/global_ui/ErrorBoundary";
 import { Spinner } from "../../components/global_ui/Spinner";
+import { PaginationControls } from "../../components/ui/PaginationControls";
 import Link from "next/link";
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
@@ -66,36 +65,34 @@ const STATUS_CONFIG: Record<
 
 type StatusFilter = "all" | Remittance["status"];
 
-// ─── Empty state ───────────────────────────────────────────────────────────────
+const PAGE_SIZE = 20;
 
 function EmptyState({ filtered }: { filtered: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
-      <div className="rounded-2xl bg-zinc-50 p-6 dark:bg-zinc-900 mb-4">
+      <div className="mb-4 rounded-2xl bg-zinc-50 p-6 dark:bg-zinc-900">
         <SendHorizontal className="h-10 w-10 text-indigo-400" />
       </div>
-      <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 mb-1">
-        {filtered ? "No remittances match your filters" : "No remittances yet"}
+      <h3 className="mb-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+        {filtered ? "No remittances match this status" : "No remittances yet"}
       </h3>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-xs">
+      <p className="max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
         {filtered
-          ? "Try adjusting your filters to see more results."
+          ? "Try a different status filter to see more results."
           : "Your cross-border transfers will appear here once you send your first remittance."}
       </p>
       {!filtered && (
         <Link
           href="/"
-          className="mt-6 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+          className="mt-6 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
         >
           <ArrowUpRight className="h-4 w-4" />
-          Send a Remittance
+          New Remittance
         </Link>
       )}
     </div>
   );
 }
-
-// ─── Connect wallet prompt ─────────────────────────────────────────────────────
 
 function ConnectWalletPrompt() {
   return (
@@ -113,85 +110,72 @@ function ConnectWalletPrompt() {
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
-
 export default function RemittancesPage() {
   const isConnected = useWalletStore(selectIsWalletConnected);
   const address = useWalletStore(selectWalletAddress);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [page, setPage] = useState(1);
+  const [pageCursors, setPageCursors] = useState<Record<number, string | null>>({ 1: null });
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [minAmount, setMinAmount] = useState("");
   const [maxAmount, setMaxAmount] = useState("");
 
-  const [currentTimestamp] = useState(() => Date.now());
+  const statusParam = statusFilter === "all" ? undefined : statusFilter;
+  const {
+    data: remittancesPage,
+    isLoading,
+    isError,
+  } = useRemittancesPage(
+    {
+      limit: PAGE_SIZE,
+      cursor: pageCursors[page] ?? null,
+      status: statusParam,
+    },
+    { enabled: isConnected },
+  );
 
-  const { data: remittances, isLoading, isError } = useRemittances({ enabled: isConnected });
-
-  const filtered = useMemo(() => {
-    if (!remittances) return [];
-    return remittances.filter((r) => {
-      if (statusFilter !== "all" && r.status !== statusFilter) return false;
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        if (
-          !r.recipientAddress.toLowerCase().includes(q) &&
-          !r.fromCurrency.toLowerCase().includes(q) &&
-          !r.toCurrency.toLowerCase().includes(q)
-        )
-          return false;
-      }
-      if (dateFrom && new Date(r.createdAt) < new Date(dateFrom)) return false;
-      if (dateTo && new Date(r.createdAt) > new Date(dateTo + "T23:59:59")) return false;
-      if (minAmount && r.amount < parseFloat(minAmount)) return false;
-      if (maxAmount && r.amount > parseFloat(maxAmount)) return false;
-      return true;
-    });
-  }, [remittances, statusFilter, searchQuery, dateFrom, dateTo, minAmount, maxAmount]);
-
-  // ... inside RemittancesPage component
+  const remittances = remittancesPage?.items ?? [];
+  const totalPages = Math.max(
+    page,
+    remittancesPage?.pageInfo.hasNext
+      ? Object.keys(pageCursors).length + 1
+      : Object.keys(pageCursors).length,
+  );
 
   const stats = useMemo(() => {
-    if (!remittances || remittances.length === 0) return null;
+    if (remittances.length === 0) {
+      return null;
+    }
 
-    const completed = remittances.filter((r) => r.status === "completed");
-    const totalRemitted = completed.reduce((sum, r) => sum + r.amount, 0);
+    const completed = remittances.filter((remittance) => remittance.status === "completed");
+    const totalRemitted = completed.reduce((sum, remittance) => sum + remittance.amount, 0);
     const avgAmount = completed.length > 0 ? totalRemitted / completed.length : 0;
-
-    // FIX: To satisfy the purity rule, we capture the time
-    // only when the memoization triggers.
-    // We use a constant here because useMemo is supposed to be idempotent.
     const referenceDate = new Date();
     const nowMs = referenceDate.getTime();
-
     const lastCompletedDate =
       completed.length > 0 ? new Date(completed[completed.length - 1].createdAt).getTime() : nowMs;
-
     const months =
       completed.length > 0
         ? Math.max(1, Math.ceil((nowMs - lastCompletedDate) / (1000 * 60 * 60 * 24 * 30)))
         : 1;
 
-    const frequency = completed.length / months;
-
     return {
       totalRemitted,
       avgAmount,
       count: completed.length,
-      frequency,
+      frequency: completed.length / months,
     };
-  }, [remittances]); // The "now" value only updates when remittances change
+  }, [remittances]);
 
-  const isFiltered =
-    statusFilter !== "all" || !!searchQuery || !!dateFrom || !!dateTo || !!minAmount || !!maxAmount;
-
-  if (!isConnected) return <ConnectWalletPrompt />;
+  if (!isConnected) {
+    return <ConnectWalletPrompt />;
+  }
 
   return (
-    <main className="space-y-8 min-h-screen p-8 lg:p-12 max-w-7xl mx-auto">
-      {/* Header */}
-      <header className="flex items-start justify-between gap-4 flex-wrap">
+    <main className="mx-auto min-h-screen max-w-7xl space-y-8 p-8 lg:p-12">
+      <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-widest text-indigo-600">
             Transfers
@@ -205,14 +189,13 @@ export default function RemittancesPage() {
         </div>
         <Link
           href="/"
-          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
         >
           <ArrowUpRight className="h-4 w-4" />
           New Remittance
         </Link>
       </header>
 
-      {/* Summary Stats */}
       <ErrorBoundary scope="remittance stats" variant="section">
         <section
           aria-label="Summary Statistics"
@@ -223,48 +206,49 @@ export default function RemittancesPage() {
               label: "Total Remitted",
               value: stats ? formatCurrency(stats.totalRemitted) : "—",
               icon: DollarSign,
-              sub: `${stats?.count ?? 0} completed transfers`,
+              sub: `${stats?.count ?? 0} completed transfers on this page`,
             },
             {
               label: "Average Amount",
               value: stats ? formatCurrency(stats.avgAmount) : "—",
               icon: TrendingUp,
-              sub: "per completed transfer",
+              sub: "per completed transfer on this page",
             },
             {
               label: "Transfer Frequency",
               value: stats ? `${stats.frequency.toFixed(1)}/mo` : "—",
               icon: Calendar,
-              sub: "average per month",
+              sub: "average per month on this page",
             },
             {
               label: "Credit Score Impact",
               value: stats ? `+${stats.count * 5} pts` : "—",
               icon: ArrowUpRight,
-              sub: "from remittance history",
+              sub: "from visible remittance history",
             },
-          ].map((s, i) => (
+          ].map((item) => (
             <article
-              key={i}
+              key={item.label}
               className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950"
             >
-              <div className="rounded-lg bg-zinc-50 p-2 dark:bg-zinc-900 w-fit mb-4">
-                <s.icon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+              <div className="mb-4 w-fit rounded-lg bg-zinc-50 p-2 dark:bg-zinc-900">
+                <item.icon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
               </div>
-              <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">{s.label}</p>
-              <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-50 mt-1">{s.value}</p>
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">{s.sub}</p>
+              <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">{item.label}</p>
+              <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+                {item.value}
+              </p>
+              <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{item.sub}</p>
             </article>
           ))}
         </section>
       </ErrorBoundary>
 
-      {/* Filters */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-base">
             <Filter className="h-4 w-4" />
-            Filters
+            Status
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -348,26 +332,9 @@ export default function RemittancesPage() {
               />
             </div>
           </div>
-
-          {isFiltered && (
-            <button
-              onClick={() => {
-                setStatusFilter("all");
-                setSearchQuery("");
-                setDateFrom("");
-                setDateTo("");
-                setMinAmount("");
-                setMaxAmount("");
-              }}
-              className="text-xs font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
-            >
-              Clear all filters
-            </button>
-          )}
         </CardContent>
       </Card>
 
-      {/* Table */}
       <ErrorBoundary scope="remittances table" variant="section">
         <section aria-label="Remittance history">
           {isLoading ? (
@@ -380,12 +347,11 @@ export default function RemittancesPage() {
                 Failed to load remittances. Please try again.
               </p>
             </div>
-          ) : filtered.length === 0 ? (
-            <EmptyState filtered={isFiltered} />
+          ) : remittances.length === 0 ? (
+            <EmptyState filtered={statusFilter !== "all"} />
           ) : (
             <div className="rounded-xl border border-zinc-200 bg-white overflow-hidden dark:border-zinc-800 dark:bg-zinc-950">
-              {/* Table header */}
-              <div className="grid grid-cols-12 gap-4 px-6 py-3 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
+              <div className="grid grid-cols-12 gap-4 border-b border-zinc-100 bg-zinc-50 px-6 py-3 dark:border-zinc-800 dark:bg-zinc-900/50">
                 <span className="col-span-4 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                   Recipient
                 </span>
@@ -404,43 +370,45 @@ export default function RemittancesPage() {
               </div>
 
               <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {filtered.map((r) => {
-                  const cfg = STATUS_CONFIG[r.status];
-                  const Icon = cfg.icon;
+                {remittances.map((remittance) => {
+                  const config = STATUS_CONFIG[remittance.status];
+                  const Icon = config.icon;
+
                   return (
                     <div
-                      key={r.id}
-                      className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-zinc-50 dark:hover:bg-zinc-900/30 transition-colors"
+                      key={remittance.id}
+                      className="grid grid-cols-12 items-center gap-4 px-6 py-4 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/30"
                     >
-                      <div className="col-span-4 flex items-center gap-3 min-w-0">
-                        <div className="h-8 w-8 rounded-full bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center flex-shrink-0">
+                      <div className="col-span-4 flex min-w-0 items-center gap-3">
+                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-500/10">
                           <SendHorizontal className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                         </div>
-                        <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50 truncate font-mono">
-                          {r.recipientAddress.slice(0, 8)}...{r.recipientAddress.slice(-6)}
+                        <span className="truncate font-mono text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                          {remittance.recipientAddress.slice(0, 8)}...
+                          {remittance.recipientAddress.slice(-6)}
                         </span>
                       </div>
                       <div className="col-span-2">
                         <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                          {formatCurrency(r.amount)}
+                          {formatCurrency(remittance.amount)}
                         </span>
                       </div>
                       <div className="col-span-2">
                         <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                          {r.fromCurrency} → {r.toCurrency}
+                          {remittance.fromCurrency} → {remittance.toCurrency}
                         </span>
                       </div>
                       <div className="col-span-2">
                         <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                          {formatDate(r.createdAt)}
+                          {formatDate(remittance.createdAt)}
                         </span>
                       </div>
                       <div className="col-span-2">
                         <span
-                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${cfg.className}`}
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${config.className}`}
                         >
                           <Icon className="h-3 w-3" />
-                          {cfg.label}
+                          {config.label}
                         </span>
                       </div>
                     </div>
@@ -452,11 +420,38 @@ export default function RemittancesPage() {
         </section>
       </ErrorBoundary>
 
-      {/* Footer count */}
-      {!isLoading && !isError && filtered.length > 0 && (
-        <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center">
-          Showing {filtered.length} of {remittances?.length ?? 0} remittances
-        </p>
+      {!isLoading && !isError && remittances.length > 0 && (
+        <PaginationControls
+          currentPage={page}
+          totalPages={totalPages}
+          hasPrevious={page > 1}
+          hasNext={Boolean(remittancesPage?.pageInfo.hasNext)}
+          onPageChange={(nextPage) => {
+            if (pageCursors[nextPage] !== undefined) {
+              setPage(nextPage);
+              return;
+            }
+
+            if (nextPage === page + 1 && remittancesPage?.pageInfo.nextCursor) {
+              setPageCursors((current) => ({
+                ...current,
+                [nextPage]: remittancesPage.pageInfo.nextCursor,
+              }));
+              setPage(nextPage);
+            }
+          }}
+          onPrevious={() => setPage((previous) => Math.max(1, previous - 1))}
+          onNext={() => {
+            if (remittancesPage?.pageInfo.nextCursor) {
+              setPageCursors((current) => ({
+                ...current,
+                [page + 1]: remittancesPage.pageInfo.nextCursor,
+              }));
+              setPage(page + 1);
+            }
+          }}
+          summary={`Showing ${remittances.length} remittances on page ${page}`}
+        />
       )}
     </main>
   );

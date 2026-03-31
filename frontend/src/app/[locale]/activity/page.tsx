@@ -6,6 +6,7 @@ import { Clock, ArrowUpRight, ArrowDownLeft, ExternalLink, X } from "lucide-reac
 import { useWalletStore, selectIsWalletConnected } from "../../stores/useWalletStore";
 import { useLoans, useRemittances } from "../../hooks/useApi";
 import { ErrorBoundary } from "../../components/global_ui/ErrorBoundary";
+import { StatusIndicator } from "../../components/ui/StatusIndicator";
 
 type FilterType = "all" | "loan" | "remittance";
 
@@ -204,11 +205,12 @@ export default function ActivityPage() {
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
                       {formatDate(item.timestamp)}
                     </p>
-                    <span
-                      className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium ${getStatusColor(item.status)}`}
-                    >
-                      {t(`status.${item.status}`)}
-                    </span>
+                    <StatusIndicator
+                      label={t(`status.${item.status}`)}
+                      tone={getStatusTone(item.status)}
+                      className="mt-1"
+                      title={`Transaction status: ${t(`status.${item.status}`)}`}
+                    />
                   </div>
                 </div>
               ))}
@@ -281,20 +283,20 @@ function formatDate(timestamp: string): string {
   });
 }
 
-function getStatusColor(status: string): string {
+function getStatusTone(status: string): "success" | "warning" | "danger" | "info" | "neutral" {
   switch (status) {
     case "completed":
     case "repaid":
-      return "bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400";
+      return "success";
     case "pending":
     case "processing":
-      return "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400";
+      return "warning";
     case "failed":
     case "defaulted":
-      return "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400";
+      return "danger";
     case "active":
-      return "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400";
+      return "info";
     default:
-      return "bg-zinc-50 text-zinc-700 dark:bg-zinc-500/10 dark:text-zinc-400";
+      return "neutral";
   }
 }

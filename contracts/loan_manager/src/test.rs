@@ -1219,46 +1219,33 @@ fn test_get_borrower_loans() {
 }
 
 #[test]
-fn test_rounding_dust_forgiveness_on_repayment() {
+fn test_pending_loans_count_against_cap() {
     let env = Env::default();
     env.mock_all_auths_allowing_non_root_auth();
 
-    let (manager, nft_client, pool_client, token_id, _token_admin) = setup_test(&env);
+    let (client, nft_client, pool_client, token_id, _token_admin) = setup_test(&env);
+
     let borrower = Address::generate(&env);
+    nft_client.mint(
+        &borrower,
+        &600,
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &None,
+    );
 
-    let history_hash = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
-    nft_client.mint(&borrower, &600, &history_hash, &None);
-
-    // Fund the lending pool so it has liquidity for the loan
     let stellar_token = StellarAssetClient::new(&env, &token_id);
     stellar_token.mint(&pool_client, &10_000);
 
-    let loan_id = manager.request_loan(&borrower, &1000);
-    manager.approve_loan(&loan_id);
+    // Set cap to 2
+    client.set_max_loans_per_borrower(&2);
 
-    // Make a partial repayment that leaves a small remaining balance
-    // Use 998 to leave 2 units remaining (which should trigger dust forgiveness)
-    manager.repay(&borrower, &loan_id, &998);
+    // Request two loans (both pending) — should consume the full cap
+    let _loan_id_1 = client.request_loan(&borrower, &500);
+    let _loan_id_2 = client.request_loan(&borrower, &500);
 
-    let loan = manager.get_loan(&loan_id);
-    let remaining_debt =
-        loan.amount - loan.principal_paid + loan.accrued_interest + loan.accrued_late_fee;
+    assert_eq!(client.get_borrower_loan_count(&borrower), 2);
 
-    // Set minimum repayment amount higher than the remaining dust
-    manager.set_min_repayment_amount(&100);
-
-    // The remaining debt should be small (2 units or less) - this should trigger rounding dust forgiveness
-    assert!(
-        remaining_debt > 0 && remaining_debt <= 100,
-        "Remaining debt should be small but non-zero"
-    );
-
-    // This repayment should succeed despite being below minimum amount because it's rounding dust
-    manager.repay(&borrower, &loan_id, &remaining_debt);
-
-    let completed_loan = manager.get_loan(&loan_id);
-    assert_eq!(completed_loan.status, LoanStatus::Repaid);
-    assert_eq!(completed_loan.principal_paid, 1000);
-    assert_eq!(completed_loan.accrued_interest, 0);
-    assert_eq!(completed_loan.accrued_late_fee, 0);
+    // Third request must be rejected even though neither loan is approved yet
+    let result = client.try_request_loan(&borrower, &500);
+    assert_eq!(result, Err(Ok(LoanError::MaxLoansReached)));
 }

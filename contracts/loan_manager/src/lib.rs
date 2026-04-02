@@ -54,6 +54,7 @@ pub enum LoanError {
     PoolPaused = 19,
     NftPaused = 20,
     InvalidConfiguration = 21,
+    SeizedBorrower = 22,
 }
 
 #[contracttype]
@@ -744,6 +745,9 @@ impl LoanManager {
         if score < min_score {
             return Err(LoanError::InsufficientScore);
         }
+        if nft_client.is_seized(&borrower) {
+            return Err(LoanError::SeizedBorrower);
+        }
 
         let active_loan_count = Self::borrower_loan_count(&env, &borrower);
         let max_loans_per_borrower = Self::max_loans_per_borrower(&env);
@@ -779,9 +783,14 @@ impl LoanManager {
         env.storage()
             .persistent()
             .set(&DataKey::Loan(loan_counter), &loan);
+
         env.storage()
             .instance()
             .set(&DataKey::LoanCounter, &loan_counter);
+
+        // Count pending loans against the borrower cap immediately.
+        Self::increment_borrower_loan_count(&env, &borrower);
+
         Self::bump_instance_ttl(&env);
         Self::bump_persistent_ttl(&env, &DataKey::Loan(loan_counter));
 
@@ -801,7 +810,6 @@ impl LoanManager {
         events::loan_requested(&env, borrower.clone(), amount);
         env.events()
             .publish((symbol_short!("LoanReq"), borrower), loan_counter);
-
         Ok(loan_counter)
     }
 
@@ -853,7 +861,6 @@ impl LoanManager {
         Self::bump_persistent_ttl(&env, &loan_key);
         let token_client = TokenClient::new(&env, &token);
 
-        Self::increment_borrower_loan_count(&env, &loan.borrower);
         token_client.transfer(&lending_pool, &loan.borrower, &loan.amount);
 
         events::loan_approved(&env, loan_id, loan.borrower.clone());
@@ -1000,14 +1007,22 @@ impl LoanManager {
         if amount >= 100 {
             let nft_contract = Self::nft_contract(&env);
             let nft_client = NftClient::new(&env, &nft_contract);
-            if completed && was_late {
-                nft_client.decrease_score(
-                    &borrower,
-                    &Self::LATE_REPAYMENT_SCORE_PENALTY.unsigned_abs(),
-                    &Some(env.current_contract_address()),
-                );
-            } else {
-                nft_client.update_score(&borrower, &amount, &Some(env.current_contract_address()));
+            let borrower_score = nft_client.get_score(&borrower);
+            if borrower_score > 0 {
+                // get_score returns 0 for burned/non-existent NFTs
+                if completed && was_late {
+                    nft_client.decrease_score(
+                        &borrower,
+                        &Self::LATE_REPAYMENT_SCORE_PENALTY.unsigned_abs(),
+                        &Some(env.current_contract_address()),
+                    );
+                } else {
+                    nft_client.update_score(
+                        &borrower,
+                        &amount,
+                        &Some(env.current_contract_address()),
+                    );
+                }
             }
         }
 
@@ -1041,6 +1056,16 @@ impl LoanManager {
         }
 
         loan.borrower.require_auth();
+
+        let nft_contract: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::NftContract)
+            .ok_or(LoanError::NotInitialized)?;
+        let nft_client = NftClient::new(&env, &nft_contract);
+        if nft_client.is_seized(&loan.borrower) {
+            return Err(LoanError::SeizedBorrower);
+        }
 
         let token: Address = env
             .storage()

@@ -19,7 +19,29 @@ import {
 } from "@tanstack/react-query";
 import { useUserStore } from "../stores/useUserStore";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+// NEXT_PUBLIC_API_URL is required in production.
+// In development it falls back to localhost — but never silently in production.
+function resolveApiUrl(): string {
+  const url = process.env.NEXT_PUBLIC_API_URL;
+
+  if (!url) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "[remitlend] NEXT_PUBLIC_API_URL is required in production but was not set. " +
+          "Add it to your deployment environment variables.",
+      );
+    }
+    console.warn(
+      "[remitlend] NEXT_PUBLIC_API_URL is not set. " +
+        "Falling back to http://localhost:3001 (development only).",
+    );
+    return "http://localhost:3001";
+  }
+
+  return url;
+}
+
+const API_URL = resolveApiUrl();
 
 // ─── Query key factory ────────────────────────────────────────────────────────
 

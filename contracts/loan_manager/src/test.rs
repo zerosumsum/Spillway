@@ -176,6 +176,33 @@ fn test_approve_loan_fails_when_pool_has_insufficient_liquidity() {
 }
 
 #[test]
+fn test_approve_loan_accounts_for_outstanding_approved_loans() {
+    let env = Env::default();
+    env.mock_all_auths_allowing_non_root_auth();
+
+    let (manager, nft_client, pool_client, token_id, _token_admin) = setup_test(&env);
+    let borrower_one = Address::generate(&env);
+    let borrower_two = Address::generate(&env);
+
+    let history_hash = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
+    nft_client.mint(&borrower_one, &600, &history_hash, &None);
+    nft_client.mint(&borrower_two, &600, &history_hash, &None);
+
+    let stellar_token = StellarAssetClient::new(&env, &token_id);
+    stellar_token.mint(&pool_client, &10_000);
+
+    let first_loan = manager.request_loan(&borrower_one, &6_000, &17280);
+    let second_loan = manager.request_loan(&borrower_two, &6_000, &17280);
+
+    manager.approve_loan(&first_loan);
+    let second_result = manager.try_approve_loan(&second_loan);
+    assert_eq!(second_result, Err(Ok(LoanError::InsufficientPoolLiquidity)));
+
+    assert_eq!(manager.get_loan(&first_loan).status, LoanStatus::Approved);
+    assert_eq!(manager.get_loan(&second_loan).status, LoanStatus::Pending);
+}
+
+#[test]
 fn test_cancel_pending_loan() {
     let env = Env::default();
     env.mock_all_auths();

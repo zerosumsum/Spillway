@@ -1020,7 +1020,7 @@ impl LoanManager {
         // If loan is fully repaid, emit terminal event and remove from storage
         if completed {
             events::loan_repaid(&env, borrower.clone(), loan_id, amount);
-            env.storage().persistent().remove(&loan_key);
+            // env.storage().persistent().remove(&loan_key);
         }
 
         if amount >= 100 {
@@ -1807,7 +1807,7 @@ impl LoanManager {
         events::loan_defaulted(&env, loan_id, loan.borrower.clone());
         
         // Remove loan from storage after emitting terminal event
-        env.storage().persistent().remove(&loan_key);
+        // env.storage().persistent().remove(&loan_key);
 
         Ok(())
     }
@@ -1855,7 +1855,7 @@ impl LoanManager {
             events::loan_defaulted(&env, loan_id, loan.borrower.clone());
             
             // Remove loan from storage after emitting terminal event
-            env.storage().persistent().remove(&loan_key);
+            // env.storage().persistent().remove(&loan_key);
         }
 
         Ok(())

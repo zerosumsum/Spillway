@@ -44,9 +44,7 @@ export default function KingdomPage() {
           <Crown className="h-8 w-8 text-purple-600 dark:text-purple-400" />
           <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">{t("title")}</h1>
         </div>
-        <p className="text-zinc-500 dark:text-zinc-400">
-          {t("description")}
-        </p>
+        <p className="text-zinc-500 dark:text-zinc-400">{t("description")}</p>
       </header>
 
       {/* Welcome card */}
@@ -57,9 +55,7 @@ export default function KingdomPage() {
               <h2 className="text-2xl font-bold text-purple-900 dark:text-purple-100">
                 {t("welcome", { kingdomTitle })}
               </h2>
-              <p className="text-purple-700 dark:text-purple-300 mt-1">
-                {t("level", { level })}
-              </p>
+              <p className="text-purple-700 dark:text-purple-300 mt-1">{t("level", { level })}</p>
             </div>
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-purple-600 to-blue-600 shadow-lg">
               <Crown size={32} className="text-white" />

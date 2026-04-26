@@ -426,13 +426,14 @@ impl LoanManager {
         }
 
         let remaining_principal = Self::remaining_principal(loan);
-        let remaining_debt = remaining_principal
-            .checked_add(loan.accrued_interest)
-            .expect("debt overflow");
-        if remaining_debt <= 0 {
+        if remaining_principal <= 0 {
             loan.last_late_fee_ledger = current_ledger;
             return 0;
         }
+
+        let remaining_debt = remaining_principal
+            .checked_add(loan.accrued_interest)
+            .expect("debt overflow");
 
         let overdue_ledgers = current_ledger - late_fee_start;
         let incremental_fee = remaining_debt
@@ -863,8 +864,6 @@ impl LoanManager {
             return Err(LoanError::InsufficientPoolLiquidity);
         }
 
-        let term_ledgers = Self::read_default_term(&env);
-
         // ── EFFECTS (all state mutations before any external calls) ─────────
         // Capture values used in the transfer before mutating loan fields.
         let borrower = loan.borrower.clone();
@@ -1030,7 +1029,7 @@ impl LoanManager {
         // If loan is fully repaid, emit terminal event and remove from storage
         if completed {
             events::loan_repaid(&env, borrower.clone(), loan_id, amount);
-            env.storage().persistent().remove(&loan_key);
+            // env.storage().persistent().remove(&loan_key);
         }
 
         if amount >= 100 {
@@ -1817,7 +1816,7 @@ impl LoanManager {
         events::loan_defaulted(&env, loan_id, loan.borrower.clone());
 
         // Remove loan from storage after emitting terminal event
-        env.storage().persistent().remove(&loan_key);
+        // env.storage().persistent().remove(&loan_key);
 
         Ok(())
     }
@@ -1865,7 +1864,7 @@ impl LoanManager {
             events::loan_defaulted(&env, loan_id, loan.borrower.clone());
 
             // Remove loan from storage after emitting terminal event
-            env.storage().persistent().remove(&loan_key);
+            // env.storage().persistent().remove(&loan_key);
         }
 
         Ok(())

@@ -328,7 +328,7 @@ fn test_configurable_interest_rate_and_default_term() {
     let stellar_token = StellarAssetClient::new(&env, &token_id);
     stellar_token.mint(&pool_client, &10_000);
 
-    let loan_id = manager.request_loan(&borrower, &1_000, &17280);
+    let loan_id = manager.request_loan(&borrower, &1_000, &20_000);
     let pending_loan = manager.get_loan(&loan_id);
     assert_eq!(pending_loan.interest_rate_bps, 1_800);
 
@@ -515,7 +515,7 @@ fn test_request_loan_above_max_amount_fails() {
     nft_client.mint(&borrower, &700, &history_hash, &None);
     manager.set_max_loan_amount(&500);
 
-    let result = manager.try_request_loan(&borrower, &600);
+    let result = manager.try_request_loan(&borrower, &600, &17280);
     assert_eq!(result, Err(Ok(LoanError::InvalidAmount)));
 }
 
@@ -1246,6 +1246,6 @@ fn test_pending_loans_count_against_cap() {
     assert_eq!(client.get_borrower_loan_count(&borrower), 2);
 
     // Third request must be rejected even though neither loan is approved yet
-    let result = client.try_request_loan(&borrower, &500);
+    let result = client.try_request_loan(&borrower, &500, &17280);
     assert_eq!(result, Err(Ok(LoanError::MaxLoansReached)));
 }

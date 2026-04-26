@@ -122,6 +122,8 @@ pub enum DataKey {
     ProposedAdmin,
     LiquidationThresholdBps,
     LiquidationBonusBps,
+    MinRateBps,
+    MaxRateBps,
 }
 
 #[contract]
@@ -149,6 +151,10 @@ impl LoanManager {
     const LATE_REPAYMENT_SCORE_PENALTY: i32 = 10;
     const DEFAULT_SCORE_PENALTY_POINTS: u32 = 50;
     const DEFAULT_MIN_REPAYMENT_AMOUNT: i128 = 100;
+    const MAX_EXTENSIONS: u32 = 3;
+    const EXTENSION_FEE_BPS: u32 = 100; // 1% of remaining principal
+    const MIN_RATE_BPS: u32 = 1; // Minimum 0.01% interest rate
+    const MAX_RATE_BPS: u32 = 100_000; // Maximum 1000% interest rate
 
     fn bump_instance_ttl(env: &Env) {
         env.storage()
@@ -227,10 +233,37 @@ impl LoanManager {
             .get::<_, Address>(&DataKey::RateOracle)
         {
             let client = RateOracleClient::new(env, &oracle_addr);
-            client.get_rate(borrower, &amount, &score)
+            let oracle_rate = client.get_rate(borrower, &amount, &score);
+
+            // Validate oracle rate is within bounds
+            let min_rate = Self::min_rate_bps(env);
+            let max_rate = Self::max_rate_bps(env);
+
+            if oracle_rate < min_rate || oracle_rate > max_rate {
+                // If oracle rate is out of bounds, fall back to default rate
+                Self::read_interest_rate(env)
+            } else {
+                oracle_rate
+            }
         } else {
             Self::read_interest_rate(env)
         }
+    }
+
+    fn min_rate_bps(env: &Env) -> u32 {
+        Self::bump_instance_ttl(env);
+        env.storage()
+            .instance()
+            .get(&DataKey::MinRateBps)
+            .unwrap_or(Self::MIN_RATE_BPS)
+    }
+
+    fn max_rate_bps(env: &Env) -> u32 {
+        Self::bump_instance_ttl(env);
+        env.storage()
+            .instance()
+            .get(&DataKey::MaxRateBps)
+            .unwrap_or(Self::MAX_RATE_BPS)
     }
 
     fn read_default_term(env: &Env) -> u32 {
@@ -789,6 +822,12 @@ impl LoanManager {
             &DataKey::LiquidationBonusBps,
             &Self::DEFAULT_LIQUIDATION_BONUS_BPS,
         );
+        env.storage()
+            .instance()
+            .set(&DataKey::MinRateBps, &Self::MIN_RATE_BPS);
+        env.storage()
+            .instance()
+            .set(&DataKey::MaxRateBps, &Self::MAX_RATE_BPS);
         Self::bump_instance_ttl(&env);
         Ok(())
     }
@@ -1899,6 +1938,60 @@ impl LoanManager {
         env.storage().instance().get(&DataKey::RateOracle)
     }
 
+    pub fn set_min_rate_bps(env: Env, min_rate: u32) -> Result<(), LoanError> {
+        Self::admin(&env).require_auth();
+
+        // Validate min_rate is not zero and doesn't exceed max_rate
+        if min_rate == 0 {
+            return Err(LoanError::InvalidRate);
+        }
+
+        let max_rate = Self::max_rate_bps(&env);
+        if min_rate > max_rate {
+            return Err(LoanError::InvalidConfiguration);
+        }
+
+        let old_min = Self::min_rate_bps(&env);
+        env.storage()
+            .instance()
+            .set(&DataKey::MinRateBps, &min_rate);
+        Self::bump_instance_ttl(&env);
+        events::min_rate_bps_updated(&env, Self::admin(&env), old_min, min_rate);
+
+        Ok(())
+    }
+
+    pub fn get_min_rate_bps(env: Env) -> u32 {
+        Self::min_rate_bps(&env)
+    }
+
+    pub fn set_max_rate_bps(env: Env, max_rate: u32) -> Result<(), LoanError> {
+        Self::admin(&env).require_auth();
+
+        // Validate max_rate is not zero and is >= min_rate
+        if max_rate == 0 {
+            return Err(LoanError::InvalidRate);
+        }
+
+        let min_rate = Self::min_rate_bps(&env);
+        if max_rate < min_rate {
+            return Err(LoanError::InvalidConfiguration);
+        }
+
+        let old_max = Self::max_rate_bps(&env);
+        env.storage()
+            .instance()
+            .set(&DataKey::MaxRateBps, &max_rate);
+        Self::bump_instance_ttl(&env);
+        events::max_rate_bps_updated(&env, Self::admin(&env), old_max, max_rate);
+
+        Ok(())
+    }
+
+    pub fn get_max_rate_bps(env: Env) -> u32 {
+        Self::max_rate_bps(&env)
+    }
+
     pub fn set_default_term(env: Env, ledgers: u32) -> Result<(), LoanError> {
         Self::admin(&env).require_auth();
         if ledgers == 0 {
@@ -2078,6 +2171,104 @@ impl LoanManager {
         nft_client.record_default(&loan.borrower, &Some(env.current_contract_address()));
 
         events::loan_defaulted(&env, loan_id, loan.borrower.clone());
+        Ok(())
+    }
+
+    /// Extend a loan's due date by the specified number of ledgers.
+    /// Only callable by the borrower while the loan is in Approved status.
+    /// Rejects extension if loan is defaulted, repaid, or has exceeded max extensions.
+    /// Optionally charges an extension fee (1% of remaining principal).
+    pub fn extend_loan(
+        env: Env,
+        borrower: Address,
+        loan_id: u32,
+        extra_ledgers: u32,
+    ) -> Result<(), LoanError> {
+        use soroban_sdk::token::TokenClient;
+
+        borrower.require_auth();
+        Self::require_not_paused(&env)?;
+
+        if extra_ledgers == 0 {
+            return Err(LoanError::InvalidTerm);
+        }
+
+        let loan_key = DataKey::Loan(loan_id);
+        let mut loan: Loan = env
+            .storage()
+            .persistent()
+            .get(&loan_key)
+            .ok_or(LoanError::LoanNotFound)?;
+        Self::bump_persistent_ttl(&env, &loan_key);
+
+        // Verify borrower matches
+        if loan.borrower != borrower {
+            return Err(LoanError::BorrowerMismatch);
+        }
+
+        // Only Approved loans can be extended
+        if loan.status != LoanStatus::Approved {
+            return Err(LoanError::LoanNotActive);
+        }
+
+        // Check if loan is past due (in default window)
+        let current_ledger = env.ledger().sequence();
+        let default_ends = loan
+            .due_date
+            .checked_add(Self::default_window_ledgers(&env))
+            .expect("default window overflow");
+        if current_ledger > default_ends {
+            return Err(LoanError::LoanPastDue);
+        }
+
+        // Check extension limit
+        if loan.extension_count >= Self::MAX_EXTENSIONS {
+            return Err(LoanError::InvalidConfiguration);
+        }
+
+        // Calculate extension fee (1% of remaining principal)
+        let remaining_principal = Self::remaining_principal(&loan);
+        let extension_fee = remaining_principal
+            .checked_mul(Self::EXTENSION_FEE_BPS as i128)
+            .and_then(|v| v.checked_div(10_000))
+            .expect("extension fee overflow");
+
+        // Collect extension fee from borrower if any
+        if extension_fee > 0 {
+            let token: Address = env
+                .storage()
+                .instance()
+                .get(&DataKey::Token)
+                .expect("token not set");
+            let lending_pool: Address = env
+                .storage()
+                .instance()
+                .get(&DataKey::LendingPool)
+                .expect("lending pool not set");
+            let token_client = TokenClient::new(&env, &token);
+            token_client.transfer(&borrower, &lending_pool, &extension_fee);
+        }
+
+        // Extend the due date
+        let new_due_date = loan
+            .due_date
+            .checked_add(extra_ledgers)
+            .expect("due date overflow");
+        loan.due_date = new_due_date;
+
+        // Increment extension count
+        loan.extension_count = loan
+            .extension_count
+            .checked_add(1)
+            .expect("extension count overflow");
+
+        // Persist updated loan
+        env.storage().persistent().set(&loan_key, &loan);
+        Self::bump_persistent_ttl(&env, &loan_key);
+
+        // Emit extension event
+        events::loan_extended(&env, loan_id, borrower, new_due_date, extension_fee);
+
         Ok(())
     }
 

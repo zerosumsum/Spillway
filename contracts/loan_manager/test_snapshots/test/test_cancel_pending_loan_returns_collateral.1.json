@@ -1047,6 +1047,30 @@
                         "key": {
                           "vec": [
                             {
+                              "symbol": "MaxRateBps"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u32": 100000
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "MinRateBps"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u32": 1
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
                               "symbol": "NftContract"
                             }
                           ]

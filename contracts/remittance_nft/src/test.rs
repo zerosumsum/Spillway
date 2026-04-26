@@ -1501,6 +1501,8 @@ fn test_score_history_max_50_entries() {
     assert_eq!(first_entry.ledger, 11);
 
     // Verify newest entry is from sequence 60
-    let last_entry = history.get(RemittanceNFT::MAX_SCORE_HISTORY_ENTRIES - 1).unwrap();
+    let last_entry = history
+        .get(RemittanceNFT::MAX_SCORE_HISTORY_ENTRIES - 1)
+        .unwrap();
     assert_eq!(last_entry.ledger, 60);
 }

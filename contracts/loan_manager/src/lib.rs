@@ -158,7 +158,9 @@ impl LoanManager {
     const DEFAULT_MIN_REPAYMENT_AMOUNT: i128 = 100;
     const MAX_EXTENSIONS: u32 = 3;
     const EXTENSION_FEE_BPS: u32 = 100; // 1% of remaining principal
+    /// Default minimum interest rate (configurable via set_rate_bounds). #631
     const MIN_RATE_BPS: u32 = 1; // Minimum 0.01% interest rate
+    /// Default maximum interest rate (configurable via set_rate_bounds). #631
     const MAX_RATE_BPS: u32 = 100_000; // Maximum 1000% interest rate
 
     fn bump_instance_ttl(env: &Env) {
@@ -240,12 +242,13 @@ impl LoanManager {
             let client = RateOracleClient::new(env, &oracle_addr);
             let oracle_rate = client.get_rate(borrower, &amount, &score);
 
-            // Validate oracle rate is within bounds
+            // Bounds-check the oracle response (#631): a compromised or stale oracle
+            // cannot grant free loans (rate=0) or cause instant defaults (extreme rate).
+            // Falls back to the configured default rate rather than reverting the tx.
             let min_rate = Self::min_rate_bps(env);
             let max_rate = Self::max_rate_bps(env);
 
             if oracle_rate < min_rate || oracle_rate > max_rate {
-                // If oracle rate is out of bounds, fall back to default rate
                 Self::read_interest_rate(env)
             } else {
                 oracle_rate
@@ -1262,8 +1265,6 @@ impl LoanManager {
             .instance()
             .get(&DataKey::LendingPool)
             .expect("lending pool not set");
-        let token_client = TokenClient::new(&env, &token);
-        token_client.transfer(&borrower, &lending_pool, &amount);
 
         let (principal_payment, interest_payment, late_fee_payment) =
             Self::proportional_repayment_split(&loan, amount);
@@ -1315,19 +1316,27 @@ impl LoanManager {
         }
 
         if completed {
+            // CEI: mark the loan as Repaid in state before any cross-contract call (#630).
+            // A reentrant repay() on the same loan_id will now hit LoanNotActive and
+            // revert, preventing double withdrawal of collateral.
             Self::adjust_total_outstanding(&env, &token, -loan.amount);
             loan.status = LoanStatus::Repaid;
-            loan.collateral_amount = 0;
             Self::decrement_borrower_loan_count(&env, &loan.borrower);
-            Self::release_collateral_internal(&env, loan_id, &loan.borrower);
         }
 
+        // ── EFFECTS committed to storage before any cross-contract call ─────────
         env.storage().persistent().set(&loan_key, &loan);
         Self::bump_persistent_ttl(&env, &loan_key);
 
-        // If loan is fully repaid, emit the terminal event and keep the terminal
-        // state queryable for downstream consumers and tests.
+        // ── INTERACTIONS: external calls after state is durable (#630) ───────────
+        let token_client = TokenClient::new(&env, &token);
+        token_client.transfer(&borrower, &lending_pool, &amount);
+
         if completed {
+            // release_collateral_internal reads collateral from storage and performs
+            // its own CEI, so it is safe to call after the loan state is committed.
+            Self::release_collateral_internal(&env, loan_id, &loan.borrower);
+            // Emit terminal repayment event for completed loans.
             events::loan_repaid(&env, borrower.clone(), loan_id, amount);
         }
 

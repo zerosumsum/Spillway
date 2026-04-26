@@ -1016,6 +1016,12 @@ impl LoanManager {
         env.storage().persistent().set(&loan_key, &loan);
         Self::bump_persistent_ttl(&env, &loan_key);
 
+        // If loan is fully repaid, emit terminal event and remove from storage
+        if completed {
+            events::loan_repaid(&env, borrower.clone(), loan_id, amount);
+            env.storage().persistent().remove(&loan_key);
+        }
+
         if amount >= 100 {
             let nft_contract = Self::nft_contract(&env);
             let nft_client = NftClient::new(&env, &nft_contract);
@@ -1041,7 +1047,11 @@ impl LoanManager {
         if late_fee_delta > 0 {
             events::late_fee_charged(&env, loan_id, late_fee_delta);
         }
-        events::loan_repaid(&env, borrower, loan_id, amount);
+        
+        // Emit repayment event only if loan is not completed (completed loans emit in the block above)
+        if !completed {
+            events::loan_repaid(&env, borrower, loan_id, amount);
+        }
 
         Ok(())
     }
@@ -1395,7 +1405,7 @@ impl LoanManager {
         Self::late_fee_rate_bps(&env)
     }
 
-    pub fn set_grace_period_ledgers(env: Env, ledgers: u32) {
+    pub fn set_grace_period_ledgers(env: Env, ledgers: u32) -> Result<(), LoanError> {
         let admin: Address = env
             .storage()
             .instance()
@@ -1403,12 +1413,19 @@ impl LoanManager {
             .expect("not initialized");
         admin.require_auth();
 
+        // Enforce invariant: default_window must be >= grace_period
+        let default_window = Self::default_window_ledgers(&env);
+        if default_window < ledgers {
+            return Err(LoanError::InvalidConfiguration);
+        }
+
         let old_ledgers = Self::grace_period_ledgers(&env);
         env.storage()
             .instance()
             .set(&DataKey::GracePeriodLedgers, &ledgers);
         Self::bump_instance_ttl(&env);
         events::grace_period_updated(&env, admin, old_ledgers, ledgers);
+        Ok(())
     }
 
     pub fn get_grace_period_ledgers(env: Env) -> u32 {
@@ -1427,6 +1444,12 @@ impl LoanManager {
             .get(&DataKey::Admin)
             .ok_or(LoanError::NotInitialized)?;
         admin.require_auth();
+
+        // Enforce invariant: default_window must be >= grace_period
+        let grace_period = Self::grace_period_ledgers(&env);
+        if ledgers < grace_period {
+            return Err(LoanError::InvalidConfiguration);
+        }
 
         let old_ledgers = Self::default_window_ledgers(&env);
         env.storage()
@@ -1781,6 +1804,9 @@ impl LoanManager {
         nft_client.record_default(&loan.borrower, &Some(env.current_contract_address()));
 
         events::loan_defaulted(&env, loan_id, loan.borrower.clone());
+        
+        // Remove loan from storage after emitting terminal event
+        env.storage().persistent().remove(&loan_key);
 
         Ok(())
     }
@@ -1826,6 +1852,9 @@ impl LoanManager {
             nft_client.record_default(&loan.borrower, &Some(env.current_contract_address()));
 
             events::loan_defaulted(&env, loan_id, loan.borrower.clone());
+            
+            // Remove loan from storage after emitting terminal event
+            env.storage().persistent().remove(&loan_key);
         }
 
         Ok(())

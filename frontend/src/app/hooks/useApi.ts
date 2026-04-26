@@ -20,6 +20,10 @@ import {
 import { useUserStore } from "../stores/useUserStore";
 import { isJwtExpired, logoutUser, SessionExpiredError } from "../lib/session";
 
+export class NetworkUnavailableError extends Error {
+  name = "NetworkUnavailableError";
+}
+
 // NEXT_PUBLIC_API_URL is required in production.
 // In development it falls back to localhost — but never silently in production.
 function resolveApiUrl(): string {
@@ -98,6 +102,10 @@ export const queryKeys = {
  * - Throws a descriptive error on non-2xx responses
  */
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    throw new NetworkUnavailableError("You appear to be offline. Please reconnect and try again.");
+  }
+
   const headers = new Headers(options.headers);
   if (!headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -117,7 +125,14 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     }
   }
 
-  const response = await fetch(`${getApiUrl()}${path}`, { ...options, headers });
+  let response: Response;
+  try {
+    response = await fetch(`${getApiUrl()}${path}`, { ...options, headers });
+  } catch (error) {
+    throw new NetworkUnavailableError(
+      "Network request failed. Check your connection and try again.",
+    );
+  }
 
   if (response.status === 401 && token) {
     const error = await response

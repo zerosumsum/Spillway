@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { EventSourcePolyfill } from "event-source-polyfill";
 import { useUserStore, type UserStore } from "../stores/useUserStore";
 import { queryKeys, type AppNotification } from "./useApi";
 
@@ -19,7 +18,7 @@ export function useNotificationStream() {
   const queryClient = useQueryClient();
   const token = useUserStore((s: UserStore) => s.authToken);
   const retryDelay = useRef(1_000);
-  const esRef = useRef<EventSource | { close: () => void } | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -31,73 +30,105 @@ export function useNotificationStream() {
       if (cancelled) return;
 
       const url = `${API_URL}/api/notifications/stream`;
-      const es = new EventSourcePolyfill(url, {
-        withCredentials: true,
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      function scheduleReconnect() {
+        if (cancelled) return;
+        const delay = Math.min(retryDelay.current, 30_000);
+        retryDelay.current = Math.min(delay * 2, 30_000);
+        timeoutRef.current = setTimeout(connect, delay);
+      }
+
+      fetch(url, {
+        method: "GET",
+        credentials: "include",
+        signal: controller.signal,
         headers: {
           Authorization: `Bearer ${token}`,
+          Accept: "text/event-stream",
         },
-      });
-      esRef.current = es;
+      })
+        .then(async (res) => {
+          if (!res.ok || !res.body) {
+            throw new Error(`SSE connect failed (${res.status})`);
+          }
 
-      es.onopen = () => {
-        retryDelay.current = 1_000; // reset backoff on successful connect
-      };
+          retryDelay.current = 1_000; // reset backoff on successful connect
 
-      es.onmessage = (event: MessageEvent<string>) => {
-        try {
-          const payload = JSON.parse(event.data) as
-            | AppNotification
-            | { type: "init"; notifications: AppNotification[] };
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
 
-          queryClient.setQueryData(
-            queryKeys.notifications.all(),
-            (prev: { notifications: AppNotification[]; unreadCount: number } | undefined) => {
-              const existing = prev ?? { notifications: [], unreadCount: 0 };
+          while (!cancelled) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
 
-              if ("type" in payload && payload.type === "init") {
-                // Merge server-sent unread list into existing cache without
-                // duplicating entries.
-                const ids = new Set(existing.notifications.map((n) => n.id));
-                const merged = [
-                  ...payload.notifications.filter((n) => !ids.has(n.id)),
-                  ...existing.notifications,
-                ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-                const unreadCount = merged.filter((n) => !n.read).length;
-                return { notifications: merged, unreadCount };
+            // SSE events are separated by a blank line.
+            const parts = buffer.split("\n\n");
+            buffer = parts.pop() ?? "";
+
+            for (const part of parts) {
+              const lines = part.split("\n");
+              for (const line of lines) {
+                if (!line.startsWith("data:")) continue;
+                const data = line.slice("data:".length).trim();
+                if (!data) continue;
+
+                try {
+                  const payload = JSON.parse(data) as
+                    | AppNotification
+                    | { type: "init"; notifications: AppNotification[] };
+
+                  queryClient.setQueryData(
+                    queryKeys.notifications.all(),
+                    (
+                      prev: { notifications: AppNotification[]; unreadCount: number } | undefined,
+                    ) => {
+                      const existing = prev ?? { notifications: [], unreadCount: 0 };
+
+                      if ("type" in payload && payload.type === "init") {
+                        const ids = new Set(existing.notifications.map((n) => n.id));
+                        const merged = [
+                          ...payload.notifications.filter((n) => !ids.has(n.id)),
+                          ...existing.notifications,
+                        ].sort(
+                          (a, b) =>
+                            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+                        );
+                        const unreadCount = merged.filter((n) => !n.read).length;
+                        return { notifications: merged, unreadCount };
+                      }
+
+                      const newNotif = payload as AppNotification;
+                      const notifications = [newNotif, ...existing.notifications];
+                      return {
+                        notifications,
+                        unreadCount: existing.unreadCount + (newNotif.read ? 0 : 1),
+                      };
+                    },
+                  );
+                } catch {
+                  // Ignore malformed SSE messages
+                }
               }
-
-              // Single new notification pushed from server
-              const newNotif = payload as AppNotification;
-              const notifications = [newNotif, ...existing.notifications];
-              return {
-                notifications,
-                unreadCount: existing.unreadCount + (newNotif.read ? 0 : 1),
-              };
-            },
-          );
-        } catch {
-          // Ignore malformed SSE messages
-        }
-      };
-
-      es.onerror = () => {
-        es.close();
-        esRef.current = null;
-        if (!cancelled) {
-          // Exponential backoff — cap at 30s
-          const delay = Math.min(retryDelay.current, 30_000);
-          retryDelay.current = Math.min(delay * 2, 30_000);
-          timeoutRef.current = setTimeout(connect, delay);
-        }
-      };
+            }
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            scheduleReconnect();
+          }
+        });
     }
 
     connect();
 
     return () => {
       cancelled = true;
-      esRef.current?.close();
-      esRef.current = null;
+      abortRef.current?.abort();
+      abortRef.current = null;
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [token, queryClient]);

@@ -23,6 +23,7 @@ pub enum NftError {
     InvalidHistoryHash = 14,
     NoProposedAdmin = 15,
     RemintNotApproved = 16,
+    BelowMinimum = 17,
 }
 
 #[contracttype]
@@ -56,6 +57,7 @@ pub enum DataKey {
     TransferCooldown(Address),
     Paused,
     ProposedAdmin,
+    MinRepaymentAmount,
 }
 
 #[contract]
@@ -74,6 +76,7 @@ impl RemittanceNFT {
     const MIN_CREDIT_SCORE: u32 = 300;
     pub const MAX_SCORE: u32 = 850;
     pub const MAX_ALLOWED_BURN_THRESHOLD: u32 = 1000; // Set as appropriate for your business logic
+    const DEFAULT_MIN_REPAYMENT_AMOUNT: i128 = 10_000_000; // 1 XLM (10M stroops)
 
     fn admin_key() -> soroban_sdk::Symbol {
         symbol_short!("ADMIN")
@@ -509,14 +512,21 @@ impl RemittanceNFT {
         if repayment_amount <= 0 {
             return Err(NftError::InvalidRepaymentAmount);
         }
+
+        let min_repayment = Self::min_repayment_amount(&env);
+        if repayment_amount < min_repayment {
+            return Err(NftError::BelowMinimum);
+        }
+
         Self::require_admin_or_authorized_minter(&env, minter)?;
 
         let metadata_key = DataKey::Metadata(user.clone());
         let mut metadata =
             Self::get_or_migrate_metadata(&env, &user).ok_or(NftError::NftNotFound)?;
 
-        // Simple logic: 1 point per 100 units of repayment
-        let points_i128 = repayment_amount / 100;
+        // Simple logic: 1 point per 1,000,000 units (1 XLM) of repayment
+        // This ensures score isn't inflated by tiny payments
+        let points_i128 = repayment_amount / 1_000_000;
         if points_i128 == 0 {
             return Ok(());
         }
@@ -541,6 +551,28 @@ impl RemittanceNFT {
             .publish((symbol_short!("ScoreUpd"), user), metadata.score);
 
         Ok(())
+    }
+
+    pub fn set_min_repayment_amount(env: Env, amount: i128) {
+        Self::admin(&env).require_auth();
+        if amount < 0 {
+            panic!("negative amount");
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::MinRepaymentAmount, &amount);
+        Self::bump_instance_ttl(&env);
+    }
+
+    pub fn get_min_repayment_amount(env: Env) -> i128 {
+        Self::min_repayment_amount(&env)
+    }
+
+    fn min_repayment_amount(env: &Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::MinRepaymentAmount)
+            .unwrap_or(Self::DEFAULT_MIN_REPAYMENT_AMOUNT)
     }
 
     pub fn decrease_score(env: Env, user: Address, penalty_points: u32, minter: Option<Address>) {

@@ -28,6 +28,19 @@ pub fn loan_refinanced(
     env.events().publish(topics, (new_amount, new_term));
 }
 
+pub fn loan_extended(
+    env: &Env,
+    loan_id: u32,
+    borrower: Address,
+    new_due_ledger: u32,
+    fee_amount: i128,
+    extension_count: u32,
+) {
+    let topics = (Symbol::new(env, "LoanExtended"), loan_id, borrower);
+    env.events()
+        .publish(topics, (new_due_ledger, fee_amount, extension_count));
+}
+
 pub fn loan_repaid(env: &Env, borrower: Address, loan_id: u32, amount: i128) {
     let topics = (Symbol::new(env, "LoanRepaid"), borrower, loan_id);
     env.events().publish(topics, amount);

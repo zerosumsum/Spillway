@@ -55,6 +55,10 @@ pub enum LoanError {
     NftPaused = 20,
     InvalidConfiguration = 21,
     SeizedBorrower = 22,
+    AmountTooLarge = 23,
+    MaxExtensionsReached = 24,
+    InvalidExtension = 25,
+    InsufficientCollateral = 26,
     LoanNotLiquidatable = 23,
 }
 
@@ -316,20 +320,20 @@ impl LoanManager {
             .expect("principal paid exceeds amount")
     }
 
-    fn accrue_interest(env: &Env, loan: &mut Loan) {
+    fn accrue_interest(env: &Env, loan: &mut Loan) -> Result<(), LoanError> {
         if loan.status != LoanStatus::Approved {
-            return;
+            return Ok(());
         }
 
         let current_ledger = env.ledger().sequence();
         if loan.last_interest_ledger == 0 || current_ledger <= loan.last_interest_ledger {
-            return;
+            return Ok(());
         }
 
         let remaining_principal = Self::remaining_principal(loan);
         if remaining_principal <= 0 {
             loan.last_interest_ledger = current_ledger;
-            return;
+            return Ok(());
         }
 
         let elapsed_ledgers = current_ledger - loan.last_interest_ledger;
@@ -340,11 +344,11 @@ impl LoanManager {
             .checked_mul(loan.interest_rate_bps as i128)
             .and_then(|v| v.checked_mul(elapsed_ledgers as i128))
             .and_then(|v| v.checked_mul(PRECISION))
-            .expect("interest calculation overflow");
+            .ok_or(LoanError::AmountTooLarge)?;
 
         let denominator = 10_000i128
             .checked_mul(Self::DEFAULT_TERM_LEDGERS as i128)
-            .expect("denominator overflow");
+            .ok_or(LoanError::AmountTooLarge)?;
 
         let total_interest = numerator / denominator;
         let interest_delta = total_interest / PRECISION;
@@ -359,9 +363,11 @@ impl LoanManager {
             .accrued_interest
             .checked_add(interest_delta)
             .and_then(|v| v.checked_add(additional_interest))
-            .expect("interest overflow");
+            .ok_or(LoanError::AmountTooLarge)?;
         loan.interest_residual = final_residual;
         loan.last_interest_ledger = current_ledger;
+
+        Ok(())
     }
 
     fn late_fee_rate_bps(env: &Env) -> u32 {
@@ -598,14 +604,14 @@ impl LoanManager {
         charged_fee
     }
 
-    fn current_total_debt(env: &Env, loan: &mut Loan) -> (i128, i128) {
-        Self::accrue_interest(env, loan);
+    fn current_total_debt(env: &Env, loan: &mut Loan) -> Result<(i128, i128), LoanError> {
+        Self::accrue_interest(env, loan)?;
         let late_fee_delta = Self::accrue_late_fee(env, loan);
         let total_debt = Self::remaining_principal(loan)
             .checked_add(loan.accrued_interest)
             .and_then(|value| value.checked_add(loan.accrued_late_fee))
             .expect("debt overflow");
-        (total_debt, late_fee_delta)
+        Ok((total_debt, late_fee_delta))
     }
 
     /// Split a repayment across principal, interest, and late fees based on
@@ -1101,6 +1107,88 @@ impl LoanManager {
         Ok(())
     }
 
+    pub fn extend_loan(env: Env, loan_id: u32, new_due_ledger: u32) -> Result<(), LoanError> {
+        use soroban_sdk::token::TokenClient;
+
+        Self::require_not_paused(&env)?;
+
+        let loan_key = DataKey::Loan(loan_id);
+        let mut loan: Loan = env
+            .storage()
+            .persistent()
+            .get(&loan_key)
+            .ok_or(LoanError::LoanNotFound)?;
+        Self::bump_persistent_ttl(&env, &loan_key);
+
+        loan.borrower.require_auth();
+
+        if loan.status != LoanStatus::Approved {
+            return Err(LoanError::LoanNotActive);
+        }
+        if new_due_ledger <= loan.due_date {
+            return Err(LoanError::InvalidExtension);
+        }
+
+        const MAX_EXTENSIONS: u32 = 2;
+        if loan.extension_count >= MAX_EXTENSIONS {
+            return Err(LoanError::MaxExtensionsReached);
+        }
+
+        // Charge an extension fee out of posted collateral.
+        const EXTENSION_FEE_BPS: i128 = 50; // 0.50%
+        let fee_amount = loan
+            .amount
+            .checked_mul(EXTENSION_FEE_BPS)
+            .and_then(|value| value.checked_div(10_000))
+            .ok_or(LoanError::AmountTooLarge)?;
+
+        if fee_amount > 0 {
+            if loan.collateral_amount < fee_amount {
+                return Err(LoanError::InsufficientCollateral);
+            }
+            loan.collateral_amount = loan
+                .collateral_amount
+                .checked_sub(fee_amount)
+                .ok_or(LoanError::AmountTooLarge)?;
+
+            let lending_pool: Address = env
+                .storage()
+                .instance()
+                .get(&DataKey::LendingPool)
+                .ok_or(LoanError::NotInitialized)?;
+            let token: Address = env
+                .storage()
+                .instance()
+                .get(&DataKey::Token)
+                .ok_or(LoanError::NotInitialized)?;
+            let token_client = TokenClient::new(&env, &token);
+            token_client.transfer(&env.current_contract_address(), &lending_pool, &fee_amount);
+        }
+
+        loan.due_date = new_due_ledger;
+        loan.last_late_fee_ledger = new_due_ledger
+            .checked_add(Self::grace_period_ledgers(&env))
+            .ok_or(LoanError::AmountTooLarge)?;
+        loan.extension_count = loan
+            .extension_count
+            .checked_add(1)
+            .ok_or(LoanError::AmountTooLarge)?;
+
+        env.storage().persistent().set(&loan_key, &loan);
+        Self::bump_persistent_ttl(&env, &loan_key);
+
+        events::loan_extended(
+            &env,
+            loan_id,
+            loan.borrower.clone(),
+            new_due_ledger,
+            fee_amount,
+            loan.extension_count,
+        );
+
+        Ok(())
+    }
+
     pub fn get_loan(env: Env, loan_id: u32) -> Result<Loan, LoanError> {
         let loan_key = DataKey::Loan(loan_id);
         let mut loan: Loan = env
@@ -1109,7 +1197,7 @@ impl LoanManager {
             .get(&loan_key)
             .ok_or(LoanError::LoanNotFound)?;
         Self::bump_persistent_ttl(&env, &loan_key);
-        let _ = Self::current_total_debt(&env, &mut loan);
+        let _ = Self::current_total_debt(&env, &mut loan)?;
         Ok(loan)
     }
 
@@ -1149,7 +1237,7 @@ impl LoanManager {
             return Err(LoanError::LoanPastDue);
         }
 
-        let (total_debt, late_fee_delta) = Self::current_total_debt(&env, &mut loan);
+        let (total_debt, late_fee_delta) = Self::current_total_debt(&env, &mut loan)?;
         if amount > total_debt {
             return Err(LoanError::RepaymentExceedsDebt);
         }
@@ -1615,7 +1703,7 @@ impl LoanManager {
         }
 
         // Settle all accrued interest and late fees up to now.
-        Self::accrue_interest(&env, &mut loan);
+        Self::accrue_interest(&env, &mut loan)?;
         let _ = Self::accrue_late_fee(&env, &mut loan);
 
         loan.interest_paid = loan

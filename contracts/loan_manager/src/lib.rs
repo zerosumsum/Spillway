@@ -717,7 +717,12 @@ impl LoanManager {
         Self::bump_instance_ttl(&env);
     }
 
-    pub fn request_loan(env: Env, borrower: Address, amount: i128, term: u32) -> Result<u32, LoanError> {
+    pub fn request_loan(
+        env: Env,
+        borrower: Address,
+        amount: i128,
+        term: u32,
+    ) -> Result<u32, LoanError> {
         borrower.require_auth();
         Self::require_not_paused(&env)?;
 
@@ -1053,7 +1058,7 @@ impl LoanManager {
         if late_fee_delta > 0 {
             events::late_fee_charged(&env, loan_id, late_fee_delta);
         }
-        
+
         // Emit repayment event only if loan is not completed (completed loans emit in the block above)
         if !completed {
             events::loan_repaid(&env, borrower, loan_id, amount);
@@ -1810,7 +1815,7 @@ impl LoanManager {
         nft_client.record_default(&loan.borrower, &Some(env.current_contract_address()));
 
         events::loan_defaulted(&env, loan_id, loan.borrower.clone());
-        
+
         // Remove loan from storage after emitting terminal event
         env.storage().persistent().remove(&loan_key);
 
@@ -1858,7 +1863,7 @@ impl LoanManager {
             nft_client.record_default(&loan.borrower, &Some(env.current_contract_address()));
 
             events::loan_defaulted(&env, loan_id, loan.borrower.clone());
-            
+
             // Remove loan from storage after emitting terminal event
             env.storage().persistent().remove(&loan_key);
         }

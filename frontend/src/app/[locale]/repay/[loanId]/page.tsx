@@ -64,7 +64,7 @@ export default function RepayLoanPage() {
 
     try {
       setIsSubmitting(true);
-      
+
       const contractId = process.env.NEXT_PUBLIC_LOAN_MANAGER_CONTRACT_ID;
       if (!contractId) {
         throw new Error("Contract configuration missing");
@@ -100,7 +100,7 @@ export default function RepayLoanPage() {
         },
         async () => {
           await executeRepayment(xdr);
-        }
+        },
       );
     } catch (error) {
       const mapped = mapTransactionError(error);
@@ -135,7 +135,7 @@ export default function RepayLoanPage() {
         setTrackerState("success");
         setTrackerTitle("Repayment recorded");
         setTrackerMessage("Your repayment was submitted and confirmed.");
-        
+
         toast.showSuccess(toastId!, {
           successMessage: "Repayment confirmed",
           txHash: result.hash,
@@ -154,7 +154,7 @@ export default function RepayLoanPage() {
       setTrackerState(mapped.cancelledByUser ? "cancelled" : "error");
       setTrackerTitle(mapped.title);
       setTrackerMessage(mapped.message);
-      
+
       if (toastId) {
         toast.showError(toastId, {
           errorMessage: mapped.title,
@@ -211,9 +211,7 @@ export default function RepayLoanPage() {
         guidance={trackerGuidance}
         txHash={trackerTxHash}
         onCancel={
-          trackerState === "signing" || trackerState === "submitting"
-            ? cancelFlow
-            : undefined
+          trackerState === "signing" || trackerState === "submitting" ? cancelFlow : undefined
         }
         disabled={isSubmitting}
       />

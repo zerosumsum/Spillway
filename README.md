@@ -33,6 +33,7 @@ The repository is organized as a monorepo containing three core packages:
 - **`contracts/`**: Soroban (Rust) smart contracts covering the lending pools, loan management, and NFT collateral logic.
 
 *For a detailed look at how these components interact, see our [Architecture Diagram](ARCHITECTURE.md).*
+*New contributor? Start with the in-repo wiki: [docs/wiki/README.md](docs/wiki/README.md).*
 
 ## 🛠 Tech Stack
 

@@ -1584,12 +1584,23 @@ impl LoanManager {
         }
 
         // Return collateral if any was posted
-        Self::release_collateral_internal(&env, loan_id, &borrower);
-
+        let collateral_to_release = loan.collateral_amount;
         loan.status = LoanStatus::Cancelled;
         loan.collateral_amount = 0;
         env.storage().persistent().set(&loan_key, &loan);
         Self::bump_persistent_ttl(&env, &loan_key);
+
+        if collateral_to_release > 0 {
+            use soroban_sdk::token::TokenClient;
+            let token: Address = env
+                .storage()
+                .instance()
+                .get(&DataKey::Token)
+                .expect("token not set");
+            let token_client = TokenClient::new(&env, &token);
+            token_client.transfer(&env.current_contract_address(), &borrower, &collateral_to_release);
+            events::collateral_returned(&env, borrower.clone(), loan_id, collateral_to_release);
+        }
         events::loan_cancelled(&env, borrower, loan_id);
 
         Ok(())
@@ -1612,12 +1623,23 @@ impl LoanManager {
         }
 
         // Return collateral if any was posted
-        Self::release_collateral_internal(&env, loan_id, &loan.borrower);
-
+        let collateral_to_release = loan.collateral_amount;
         loan.status = LoanStatus::Rejected;
         loan.collateral_amount = 0;
         env.storage().persistent().set(&loan_key, &loan);
         Self::bump_persistent_ttl(&env, &loan_key);
+
+        if collateral_to_release > 0 {
+            use soroban_sdk::token::TokenClient;
+            let token: Address = env
+                .storage()
+                .instance()
+                .get(&DataKey::Token)
+                .expect("token not set");
+            let token_client = TokenClient::new(&env, &token);
+            token_client.transfer(&env.current_contract_address(), &loan.borrower, &collateral_to_release);
+            events::collateral_returned(&env, loan.borrower.clone(), loan_id, collateral_to_release);
+        }
         events::loan_rejected(&env, loan_id, reason);
 
         Ok(())

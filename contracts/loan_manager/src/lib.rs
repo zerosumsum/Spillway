@@ -1017,7 +1017,13 @@ impl LoanManager {
         let token_client = TokenClient::new(&env, &token);
         token_client.transfer(&lending_pool, &borrower, &transfer_amount);
 
-        events::loan_approved(&env, loan_id, borrower.clone());
+        events::loan_approved(
+            &env,
+            loan_id,
+            borrower.clone(),
+            loan.interest_rate_bps,
+            loan.term_ledgers,
+        );
         events::loan_approved_by_admin(&env, admin, loan_id, borrower);
 
         Ok(())

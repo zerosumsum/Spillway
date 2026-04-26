@@ -2,8 +2,8 @@
 
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { rpc } from "@stellar/stellar-sdk";
 import { signTransaction } from "@stellar/freighter-api";
+import { submitLoanTransaction } from "../../../hooks/useApi";
 import { Button } from "../../../components/ui/Button";
 import {
   TransactionStatusTracker,
@@ -22,8 +22,6 @@ import { useContractToast } from "../../../hooks/useContractToast";
 import { TransactionPreviewModal } from "../../../components/transaction/TransactionPreviewModal";
 import { useTransactionPreview } from "../../../hooks/useTransactionPreview";
 import { buildUnsignedRepaymentXdr } from "../../../utils/soroban";
-
-const DEFAULT_RPC_URL = "https://soroban-testnet.stellar.org";
 
 export default function RepayLoanPage() {
   const params = useParams<{ loanId: string }>();
@@ -118,27 +116,31 @@ export default function RepayLoanPage() {
       setTrackerTitle("Awaiting wallet confirmation");
       setTrackerMessage("Approve the repayment transaction in your wallet.");
 
-      const signedXdr = await signTransaction(unsignedXdr, {
-        network: "TESTNET",
+      const signResult = await signTransaction(unsignedXdr, {
+        networkPassphrase: "Test SDF Network ; September 2015",
       });
+      if (signResult.error) {
+        throw new Error(
+          typeof signResult.error === "string" ? signResult.error : "Failed to sign transaction",
+        );
+      }
 
       setTrackerState("submitting");
       setTrackerTitle("Submitting repayment");
       setTrackerMessage("Sending repayment transaction to the network.");
       toastId = toast.showPending("Repayment transaction submitted");
 
-      const server = new rpc.Server(process.env.NEXT_PUBLIC_STELLAR_RPC_URL ?? DEFAULT_RPC_URL);
-      const result = await server.submitTransaction(signedXdr);
+      const result = await submitLoanTransaction(signResult.signedTxXdr);
 
       if (result.status === "SUCCESS") {
-        setTrackerTxHash(result.hash);
+        setTrackerTxHash(result.txHash);
         setTrackerState("success");
         setTrackerTitle("Repayment recorded");
         setTrackerMessage("Your repayment was submitted and confirmed.");
 
         toast.showSuccess(toastId!, {
           successMessage: "Repayment confirmed",
-          txHash: result.hash,
+          txHash: result.txHash,
         });
 
         // Invalidate cache (simulated by a short delay before refresh)

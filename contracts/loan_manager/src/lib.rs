@@ -88,6 +88,7 @@ pub struct Loan {
     // How many extensions have been granted for this loan.
     // Capped at MaxExtensions to prevent indefinite deferral.
     pub extension_count: u32,
+    pub term_ledgers: u32,
 }
 
 #[contracttype]
@@ -717,7 +718,12 @@ impl LoanManager {
         Self::bump_instance_ttl(&env);
     }
 
-    pub fn request_loan(env: Env, borrower: Address, amount: i128) -> Result<u32, LoanError> {
+    pub fn request_loan(
+        env: Env,
+        borrower: Address,
+        amount: i128,
+        term: u32,
+    ) -> Result<u32, LoanError> {
         borrower.require_auth();
         Self::require_not_paused(&env)?;
 
@@ -728,6 +734,10 @@ impl LoanManager {
         let max_loan_amount = Self::max_loan_amount(&env);
         if amount > max_loan_amount {
             return Err(LoanError::InvalidAmount);
+        }
+
+        if term == 0 {
+            return Err(LoanError::InvalidTerm);
         }
 
         let nft_contract: Address = env
@@ -779,6 +789,7 @@ impl LoanManager {
             status: LoanStatus::Pending,
             interest_residual: 0,
             extension_count: 0,
+            term_ledgers: term,
         };
 
         env.storage()
@@ -853,15 +864,13 @@ impl LoanManager {
             return Err(LoanError::InsufficientPoolLiquidity);
         }
 
-        let term_ledgers = Self::read_default_term(&env);
-
         // ── EFFECTS (all state mutations before any external calls) ─────────
         // Capture values used in the transfer before mutating loan fields.
         let borrower = loan.borrower.clone();
         let transfer_amount = loan.amount;
 
         loan.status = LoanStatus::Approved;
-        loan.due_date = env.ledger().sequence() + term_ledgers;
+        loan.due_date = env.ledger().sequence() + loan.term_ledgers;
         loan.last_interest_ledger = env.ledger().sequence();
         loan.last_late_fee_ledger = loan
             .due_date

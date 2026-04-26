@@ -42,7 +42,12 @@ function resolveApiUrl(): string {
   return url;
 }
 
-const API_URL = resolveApiUrl();
+let cachedApiUrl: string | null = null;
+function getApiUrl(): string {
+  if (cachedApiUrl !== null) return cachedApiUrl;
+  cachedApiUrl = resolveApiUrl();
+  return cachedApiUrl;
+}
 
 // ─── Query key factory ────────────────────────────────────────────────────────
 
@@ -112,7 +117,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     }
   }
 
-  const response = await fetch(`${API_URL}${path}`, { ...options, headers });
+  const response = await fetch(`${getApiUrl()}${path}`, { ...options, headers });
 
   if (response.status === 401 && token) {
     const error = await response
@@ -725,7 +730,7 @@ export function useCreditScore(
         return;
       }
 
-      const url = `${API_URL}/api/events/stream?borrower=${encodeURIComponent(walletAddress)}`;
+      const url = `${getApiUrl()}/api/events/stream?borrower=${encodeURIComponent(walletAddress)}`;
       const es = new EventSource(url, { withCredentials: true });
       eventSource = es;
 
@@ -1223,6 +1228,16 @@ export function useWithdrawFromPool() {
  */
 export async function submitPoolTransaction(signedTxXdr: string) {
   return apiFetch<{ txHash: string; status: string; resultXdr?: string }>("/pool/submit", {
+    method: "POST",
+    body: JSON.stringify({ signedTxXdr }),
+  });
+}
+
+/**
+ * Submits a signed loan transaction (e.g. repayment) to the Stellar network.
+ */
+export async function submitLoanTransaction(signedTxXdr: string) {
+  return apiFetch<{ txHash: string; status: string; resultXdr?: string }>("/loans/submit", {
     method: "POST",
     body: JSON.stringify({ signedTxXdr }),
   });

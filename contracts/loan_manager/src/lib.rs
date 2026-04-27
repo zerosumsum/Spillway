@@ -1075,9 +1075,7 @@ impl LoanManager {
         let pool_client = PoolClient::new(&env, &lending_pool);
         let pool_balance = pool_client.pool_balance(&token);
         let total_outstanding = Self::total_outstanding(&env, &token);
-        let available_liquidity = pool_balance
-            .checked_sub(total_outstanding)
-            .unwrap_or(0);
+        let available_liquidity = pool_balance.checked_sub(total_outstanding).unwrap_or(0);
         if available_liquidity < loan.amount {
             return Err(LoanError::InsufficientPoolLiquidity);
         }
@@ -1117,7 +1115,6 @@ impl LoanManager {
         Ok(())
     }
 
-
     pub fn get_loan(env: Env, loan_id: u32) -> Result<Loan, LoanError> {
         let loan_key = DataKey::Loan(loan_id);
         let mut loan: Loan = env
@@ -1135,6 +1132,7 @@ impl LoanManager {
 
         borrower.require_auth();
         Self::require_not_paused(&env)?;
+        Self::bump_instance_ttl(&env);
 
         if amount <= 0 {
             return Err(LoanError::InvalidAmount);
@@ -1292,7 +1290,7 @@ impl LoanManager {
                     };
 
                     if points_i32 > 0 {
-                        let _ = nft_client.apply_score_delta(
+                        nft_client.apply_score_delta(
                             &borrower,
                             &points_i32,
                             &Some(env.current_contract_address()),
@@ -1535,7 +1533,11 @@ impl LoanManager {
                 .get(&DataKey::Token)
                 .expect("token not set");
             let token_client = TokenClient::new(&env, &token);
-            token_client.transfer(&env.current_contract_address(), &borrower, &collateral_to_release);
+            token_client.transfer(
+                &env.current_contract_address(),
+                &borrower,
+                &collateral_to_release,
+            );
             events::collateral_returned(&env, borrower.clone(), loan_id, collateral_to_release);
         }
         events::loan_cancelled(&env, borrower, loan_id);
@@ -1573,8 +1575,17 @@ impl LoanManager {
                 .get(&DataKey::Token)
                 .expect("token not set");
             let token_client = TokenClient::new(&env, &token);
-            token_client.transfer(&env.current_contract_address(), &loan.borrower, &collateral_to_release);
-            events::collateral_returned(&env, loan.borrower.clone(), loan_id, collateral_to_release);
+            token_client.transfer(
+                &env.current_contract_address(),
+                &loan.borrower,
+                &collateral_to_release,
+            );
+            events::collateral_returned(
+                &env,
+                loan.borrower.clone(),
+                loan_id,
+                collateral_to_release,
+            );
         }
         events::loan_rejected(&env, loan_id, reason);
 

@@ -9,7 +9,6 @@ const STATUS_CONFIG: Record<
   active: { label: "Active", tone: "success" },
   repaid: { label: "Repaid", tone: "info" },
   defaulted: { label: "Defaulted", tone: "danger" },
-  liquidated: { label: "Liquidated", tone: "danger" },
   pending: { label: "Pending", tone: "warning" },
   liquidated: { label: "Liquidated", tone: "danger" },
 };

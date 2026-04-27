@@ -138,7 +138,7 @@ export interface Loan {
   currency: string;
   interestRate: number;
   termDays: number;
-  status: "pending" | "active" | "repaid" | "defaulted";
+  status: "pending" | "active" | "repaid" | "defaulted" | "liquidated";
   borrowerId: string;
   createdAt: string;
 }
@@ -200,7 +200,7 @@ export interface BorrowerLoan {
   totalOwed: number;
   totalRepaid: number;
   nextPaymentDeadline: string;
-  status: "active" | "pending" | "repaid" | "defaulted";
+  status: "active" | "pending" | "repaid" | "defaulted" | "liquidated";
   borrower: string;
   approvedAt?: string;
 }
@@ -547,7 +547,7 @@ export function useCreateLoan(
   const queryClient = useQueryClient();
 
   return useMutation<Loan & { txHash?: string }, Error, Omit<Loan, "id" | "createdAt" | "status">>({
-    mutationFn: (data: Omit<Loan, "id" | "createdAt" | "status">) =>
+    mutationFn: (data) =>
       apiFetch<Loan & { txHash?: string }>("/loans", {
         method: "POST",
         body: JSON.stringify(data),
@@ -622,7 +622,7 @@ export function useCreateRemittance(
     Error,
     Omit<Remittance, "id" | "createdAt" | "status">
   >({
-    mutationFn: (data: Omit<Remittance, "id" | "createdAt" | "status">) =>
+    mutationFn: (data) =>
       apiFetch<Remittance & { txHash?: string }>("/remittances", {
         method: "POST",
         body: JSON.stringify(data),
@@ -688,9 +688,9 @@ export function useCreditScore(
   options?: Omit<UseQueryOptions<number>, "queryKey" | "queryFn">,
 ) {
   const queryClient = useQueryClient();
-  const userData = useUserStore((s: any) => s.user);
+  const userData = useUserStore((s) => s.user);
   const walletAddress = userData?.walletAddress;
-  const authToken = useUserStore((s: any) => s.authToken);
+  const authToken = useUserStore((s) => s.authToken);
 
   const [previousScoreState, setPreviousScoreState] = useState<{
     walletAddress: string | undefined;
@@ -836,19 +836,19 @@ export function useBorrowerLoans(borrowerAddress: string | undefined) {
 
   const loans = query.data ?? [];
 
-  const activeLoans = loans.filter((l: BorrowerLoan) => l.status === "active");
+  const activeLoans = loans.filter((l) => l.status === "active");
   const now = new Date();
-  const overdueLoans = activeLoans.filter((l: BorrowerLoan) => new Date(l.nextPaymentDeadline) < now);
+  const overdueLoans = activeLoans.filter((l) => new Date(l.nextPaymentDeadline) < now);
   const upcomingDeadlines = activeLoans
-    .filter((l: BorrowerLoan) => new Date(l.nextPaymentDeadline) >= now)
+    .filter((l) => new Date(l.nextPaymentDeadline) >= now)
     .sort(
-      (a: BorrowerLoan, b: BorrowerLoan) =>
+      (a, b) =>
         new Date(a.nextPaymentDeadline).getTime() - new Date(b.nextPaymentDeadline).getTime(),
     );
 
   const stats: LoanStats = {
     totalActive: activeLoans.length,
-    totalOwed: activeLoans.reduce((sum: number, l: BorrowerLoan) => sum + l.totalOwed, 0),
+    totalOwed: activeLoans.reduce((sum, l) => sum + l.totalOwed, 0),
     nextPaymentDue: upcomingDeadlines[0]?.nextPaymentDeadline ?? null,
     overdueCount: overdueLoans.length,
   };
@@ -965,7 +965,7 @@ export function useNotifications(
 export function useMarkNotificationsRead() {
   const queryClient = useQueryClient();
   return useMutation<void, Error, number[]>({
-    mutationFn: (ids: number[]) =>
+    mutationFn: (ids) =>
       apiFetch<void>("/notifications/mark-read", {
         method: "POST",
         body: JSON.stringify({ ids }),
@@ -1011,13 +1011,13 @@ export function useRepayLoan() {
     { loanId: number; amount: number; borrowerAddress: string },
     RepayContext
   >({
-    mutationFn: ({ loanId, amount }: { loanId: number; amount: number; borrowerAddress: string }) =>
+    mutationFn: ({ loanId, amount }) =>
       apiFetch<{ txHash: string }>(`/loans/${loanId}/repay`, {
         method: "POST",
         body: JSON.stringify({ amount }),
       }),
 
-    onMutate: async ({ loanId, amount, borrowerAddress }: { loanId: number; amount: number; borrowerAddress: string }) => {
+    onMutate: async ({ loanId, amount, borrowerAddress }) => {
       await queryClient.cancelQueries({
         queryKey: queryKeys.loans.detail(String(loanId)),
       });
@@ -1050,7 +1050,7 @@ export function useRepayLoan() {
       return { previousLoanDetail, previousBorrowerLoans, previousPoolStats };
     },
 
-    onError: (_error: Error, { loanId, borrowerAddress }: { loanId: number; amount: number; borrowerAddress: string }, context: RepayContext | undefined) => {
+    onError: (_error, { loanId, borrowerAddress }, context) => {
       if (context?.previousLoanDetail !== undefined) {
         queryClient.setQueryData(
           queryKeys.loans.detail(String(loanId)),
@@ -1068,7 +1068,7 @@ export function useRepayLoan() {
       }
     },
 
-    onSettled: (_data: { txHash: string } | undefined, _error: Error | null, { loanId, borrowerAddress }: { loanId: number; amount: number; borrowerAddress: string }) => {
+    onSettled: (_data, _error, { loanId, borrowerAddress }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.loans.detail(String(loanId)) });
       queryClient.invalidateQueries({
         queryKey: queryKeys.borrowerLoans.byAddress(borrowerAddress),
@@ -1094,13 +1094,13 @@ export function useDepositToPool() {
     { amount: number; depositorAddress: string; token: string },
     DepositContext
   >({
-    mutationFn: ({ amount, depositorAddress, token }: { amount: number; depositorAddress: string; token: string }) =>
+    mutationFn: ({ amount, depositorAddress, token }) =>
       apiFetch<{ unsignedTxXdr: string; networkPassphrase: string }>("/pool/build-deposit", {
         method: "POST",
         body: JSON.stringify({ amount, depositorPublicKey: depositorAddress, token }),
       }),
 
-    onMutate: async ({ amount, depositorAddress }: { amount: number; depositorAddress: string; token: string }) => {
+    onMutate: async ({ amount, depositorAddress }) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.pool.stats() });
       await queryClient.cancelQueries({
         queryKey: queryKeys.pool.depositor(depositorAddress),
@@ -1129,7 +1129,7 @@ export function useDepositToPool() {
       return { previousPoolStats, previousDepositor };
     },
 
-    onError: (_error: Error, { depositorAddress }: { amount: number; depositorAddress: string; token: string }, context: DepositContext | undefined) => {
+    onError: (_error, { depositorAddress }, context) => {
       if (context?.previousPoolStats !== undefined) {
         queryClient.setQueryData(queryKeys.pool.stats(), context.previousPoolStats);
       }
@@ -1141,7 +1141,7 @@ export function useDepositToPool() {
       }
     },
 
-    onSettled: (_data: { unsignedTxXdr: string; networkPassphrase: string } | undefined, _error: Error | null, { depositorAddress }: { amount: number; depositorAddress: string; token: string }) => {
+    onSettled: (_data, _error, { depositorAddress }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pool.stats() });
       queryClient.invalidateQueries({ queryKey: queryKeys.pool.depositor(depositorAddress) });
     },
@@ -1164,13 +1164,13 @@ export function useWithdrawFromPool() {
     { amount: number; depositorAddress: string; token: string },
     WithdrawContext
   >({
-    mutationFn: ({ amount, depositorAddress, token }: { amount: number; depositorAddress: string; token: string }) =>
+    mutationFn: ({ amount, depositorAddress, token }) =>
       apiFetch<{ unsignedTxXdr: string; networkPassphrase: string }>("/pool/build-withdraw", {
         method: "POST",
         body: JSON.stringify({ amount, depositorPublicKey: depositorAddress, token }),
       }),
 
-    onMutate: async ({ amount, depositorAddress }: { amount: number; depositorAddress: string; token: string }) => {
+    onMutate: async ({ amount, depositorAddress }) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.pool.stats() });
       await queryClient.cancelQueries({
         queryKey: queryKeys.pool.depositor(depositorAddress),
@@ -1199,7 +1199,7 @@ export function useWithdrawFromPool() {
       return { previousPoolStats, previousDepositor };
     },
 
-    onError: (_error: Error, { depositorAddress }: { amount: number; depositorAddress: string; token: string }, context: WithdrawContext | undefined) => {
+    onError: (_error, { depositorAddress }, context) => {
       if (context?.previousPoolStats !== undefined) {
         queryClient.setQueryData(queryKeys.pool.stats(), context.previousPoolStats);
       }
@@ -1211,7 +1211,7 @@ export function useWithdrawFromPool() {
       }
     },
 
-    onSettled: (_data: { unsignedTxXdr: string; networkPassphrase: string } | undefined, _error: Error | null, { depositorAddress }: { amount: number; depositorAddress: string; token: string }) => {
+    onSettled: (_data, _error, { depositorAddress }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pool.stats() });
       queryClient.invalidateQueries({ queryKey: queryKeys.pool.depositor(depositorAddress) });
     },

@@ -23,19 +23,23 @@ export function LoanCard({ loan, variant = "compact" }: LoanCardProps) {
   const daysUntil = getDaysUntilDeadline(loan.nextPaymentDeadline);
   const isOverdue = daysUntil < 0;
   const isUrgent = daysUntil >= 0 && daysUntil <= 7;
-  const isTerminalDistressed = loan.status === "defaulted";
+  const isLiquidated = loan.status === "liquidated";
+  const isDefaulted = loan.status === "defaulted";
+  const isTerminalDistressed = isDefaulted || isLiquidated;
 
   // ── Badge ──────────────────────────────────────────────────────────────────
   const badge =
     variant === "detailed"
       ? {
-          label: isTerminalDistressed
-            ? "Defaulted"
-            : isOverdue
-              ? "Overdue"
-              : isUrgent
-                ? "Due Soon"
-                : "On Track",
+          label: isLiquidated
+            ? "Liquidated"
+            : isDefaulted
+              ? "Defaulted"
+              : isOverdue
+                ? "Overdue"
+                : isUrgent
+                  ? "Due Soon"
+                  : "On Track",
           className: isTerminalDistressed
             ? "bg-red-900 text-white"
             : isOverdue
@@ -68,11 +72,13 @@ export function LoanCard({ loan, variant = "compact" }: LoanCardProps) {
       : isUrgent
         ? "text-yellow-600"
         : "text-gray-600";
-  const deadlineLabel = isTerminalDistressed
-    ? "Contact support to recover"
-    : isOverdue
-      ? `${Math.abs(daysUntil)} days overdue`
-      : `${daysUntil} days remaining`;
+  const deadlineLabel = isLiquidated
+    ? "Collateral was liquidated"
+    : isDefaulted
+      ? "Contact support to recover"
+      : isOverdue
+        ? `${Math.abs(daysUntil)} days overdue`
+        : `${daysUntil} days remaining`;
 
   // ── Progress (detailed only) ───────────────────────────────────────────────
   const totalForProgress = loan.principal + loan.accruedInterest;

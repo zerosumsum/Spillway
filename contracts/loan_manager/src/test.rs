@@ -1239,6 +1239,59 @@ fn test_liquidate_rejects_healthy_collateral_ratio() {
 }
 
 #[test]
+fn test_liquidation_bonus_cap_enforced() {
+    let env = Env::default();
+    env.mock_all_auths_allowing_non_root_auth();
+
+    let (manager, nft_client, pool_client, token_id, _token_admin) = setup_test(&env);
+    let borrower = Address::generate(&env);
+    let liquidator = Address::generate(&env);
+
+    let history_hash = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
+    nft_client.mint(&borrower, &650, &history_hash, &None);
+
+    let token_client = TokenClient::new(&env, &token_id);
+    let stellar_token = StellarAssetClient::new(&env, &token_id);
+    stellar_token.mint(&pool_client, &20_000);
+    stellar_token.mint(&borrower, &20_000);
+
+    // Attempt to set bonus above 20% cap - should fail
+    let result = manager.try_set_liquidation_bonus_bps(&3_000); // 30%
+    assert_eq!(result, Err(Ok(LoanError::InvalidConfiguration)));
+
+    // Set bonus at the cap (20%) - should succeed
+    manager.set_liquidation_bonus_bps(&2_000);
+    assert_eq!(manager.get_liquidation_bonus_bps(), 2_000);
+
+    // Create and liquidate a loan
+    manager.set_liquidation_threshold(&14_500);
+    let loan_id = manager.request_loan(&borrower, &1_000, &17_280);
+    manager.approve_loan(&loan_id);
+    manager.deposit_collateral(&loan_id, &1_000); // Collateral = debt
+
+    let liquidator_balance_before = token_client.balance(&liquidator);
+    manager.liquidate(&liquidator, &loan_id);
+
+    // With 20% bonus on 1000 collateral, liquidator should get 200
+    // But since collateral = debt, there's no surplus, so bonus should be 0
+    let liquidator_balance_after = token_client.balance(&liquidator);
+    assert_eq!(liquidator_balance_after, liquidator_balance_before);
+
+    // Test with surplus collateral
+    let loan_id2 = manager.request_loan(&borrower, &1_000, &17_280);
+    manager.approve_loan(&loan_id2);
+    manager.deposit_collateral(&loan_id2, &1_500); // 500 surplus
+
+    let liquidator_balance_before = token_client.balance(&liquidator);
+    manager.liquidate(&liquidator, &loan_id2);
+
+    // With 20% bonus on 1500, that's 300, but only 500 surplus available
+    // So liquidator gets 300 (20% of 1500)
+    let liquidator_balance_after = token_client.balance(&liquidator);
+    assert_eq!(liquidator_balance_after, liquidator_balance_before + 300);
+}
+
+#[test]
 #[should_panic]
 fn test_deposit_collateral_rejects_non_active_loan() {
     let env = Env::default();

@@ -151,6 +151,7 @@ impl LoanManager {
     const DEFAULT_DEFAULT_WINDOW_LEDGERS: u32 = Self::DEFAULT_TERM_LEDGERS;
     const DEFAULT_LIQUIDATION_THRESHOLD_BPS: u32 = 15_000;
     const DEFAULT_LIQUIDATION_BONUS_BPS: u32 = 500;
+    const MAX_LIQUIDATION_BONUS_BPS: u32 = 2000; // 20% cap on liquidation bonus
     const MIN_COLLATERAL_RATIO_BPS: i128 = 10_000;
     const MAX_RATIO_BPS: u32 = 10_000;
     const LATE_REPAYMENT_SCORE_PENALTY: i32 = 10;
@@ -417,7 +418,7 @@ impl LoanManager {
     }
 
     fn validate_liquidation_bonus_bps(bonus_bps: u32) -> Result<(), LoanError> {
-        if bonus_bps > Self::MAX_RATIO_BPS {
+        if bonus_bps > Self::MAX_LIQUIDATION_BONUS_BPS {
             return Err(LoanError::InvalidConfiguration);
         }
         Ok(())
@@ -1437,11 +1438,24 @@ impl LoanManager {
             .and_then(|value| value.checked_div(Self::MAX_RATIO_BPS as i128))
             .expect("liquidation bonus overflow");
 
+        // Ensure bonus cap is enforced - bonus BPS should never exceed MAX_LIQUIDATION_BONUS_BPS
+        debug_assert!(
+            Self::liquidation_bonus_bps(&env) <= Self::MAX_LIQUIDATION_BONUS_BPS,
+            "Liquidation bonus BPS exceeds maximum cap"
+        );
+
         let (debt_repaid, liquidator_bonus, borrower_refund) = if collateral_amount >= total_debt {
             let collateral_surplus = collateral_amount
                 .checked_sub(total_debt)
                 .expect("collateral surplus underflow");
             let liquidator_bonus = configured_bonus.min(collateral_surplus);
+            
+            // Additional safety check: ensure bonus never exceeds remaining collateral
+            debug_assert!(
+                liquidator_bonus <= collateral_amount,
+                "Liquidation bonus exceeds collateral amount"
+            );
+            
             let borrower_refund = collateral_surplus
                 .checked_sub(liquidator_bonus)
                 .expect("borrower refund underflow");

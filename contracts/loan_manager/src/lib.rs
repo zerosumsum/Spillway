@@ -1289,7 +1289,7 @@ impl LoanManager {
                     };
 
                     if points_i32 > 0 {
-                        let _ = nft_client.apply_score_delta(
+                        nft_client.apply_score_delta(
                             &borrower,
                             &points_i32,
                             &Some(env.current_contract_address()),

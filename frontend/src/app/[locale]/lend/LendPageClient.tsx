@@ -31,6 +31,7 @@ import { useDepositOperation, useWithdrawalOperation } from "../../hooks/useRepa
 import { selectWalletAddress, useWalletStore } from "../../stores/useWalletStore";
 import { useSSE } from "../../hooks/useSSE";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { Tooltip } from "../../components/ui/Tooltip";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
@@ -185,11 +186,15 @@ export function LendPageClient() {
               label: "Utilization Rate",
               value: formatPercent(poolStats?.utilizationRate ?? 0),
               icon: Percent,
+              tooltip:
+                "Utilization Rate: How much of the pool is currently loaned out. Higher utilization can increase yield, but may reduce instant liquidity.",
             },
             {
               label: "Current APY",
               value: formatPercent(poolStats?.apy ?? 0),
               icon: Activity,
+              tooltip:
+                "APY (Annual Percentage Yield): The estimated yearly return on deposits, including compounding. This may vary with pool utilization and repayments.",
             },
             {
               label: "Active Loans",
@@ -206,7 +211,12 @@ export function LendPageClient() {
                   <item.icon className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">{item.label}</p>
+                  <p className="flex items-center gap-1 text-sm text-zinc-500 dark:text-zinc-400">
+                    {item.label}
+                    {"tooltip" in item && item.tooltip ? (
+                      <Tooltip content={item.tooltip} label={`${item.label} info`} />
+                    ) : null}
+                  </p>
                   {isLoading ? (
                     <Skeleton className="mt-1 h-7 w-24" />
                   ) : (

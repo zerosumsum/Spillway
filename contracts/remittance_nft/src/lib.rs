@@ -76,7 +76,7 @@ impl RemittanceNFT {
     const MIN_CREDIT_SCORE: u32 = 300;
     pub const MAX_SCORE: u32 = 850;
     pub const MAX_ALLOWED_BURN_THRESHOLD: u32 = 1000; // Set as appropriate for your business logic
-    const DEFAULT_MIN_REPAYMENT_AMOUNT: i128 = 10_000_000; // 1 XLM (10M stroops)
+    const DEFAULT_MIN_REPAYMENT_AMOUNT: i128 = 0;
     /// Minimum repayment amount accepted by update_score() (1/10 XLM in stroops).
     /// Dust repayments below this threshold award 0 score points due to integer
     /// division (`repayment_amount / 100 == 0`) but still write storage and emit
@@ -535,9 +535,8 @@ impl RemittanceNFT {
         let mut metadata =
             Self::get_or_migrate_metadata(&env, &user).ok_or(NftError::NftNotFound)?;
 
-        // Simple logic: 1 point per 1,000,000 units (1 XLM) of repayment
-        // This ensures score isn't inflated by tiny payments
-        let points_i128 = repayment_amount / 1_000_000;
+        // Simple logic: 1 point per 100 units of repayment.
+        let points_i128 = repayment_amount / 100;
         if points_i128 == 0 {
             return Ok(());
         }

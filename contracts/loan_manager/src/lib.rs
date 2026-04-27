@@ -1132,6 +1132,7 @@ impl LoanManager {
 
         borrower.require_auth();
         Self::require_not_paused(&env)?;
+        Self::bump_instance_ttl(&env);
 
         if amount <= 0 {
             return Err(LoanError::InvalidAmount);

@@ -77,6 +77,11 @@ impl RemittanceNFT {
     pub const MAX_SCORE: u32 = 850;
     pub const MAX_ALLOWED_BURN_THRESHOLD: u32 = 1000; // Set as appropriate for your business logic
     const DEFAULT_MIN_REPAYMENT_AMOUNT: i128 = 10_000_000; // 1 XLM (10M stroops)
+    /// Minimum repayment amount accepted by update_score() (1/10 XLM in stroops).
+    /// Dust repayments below this threshold award 0 score points due to integer
+    /// division but still write storage and emit events, enabling spam attacks.
+    /// This floor rejects such calls early with InvalidRepaymentAmount (error 7).
+    pub const MIN_SCORE_UPDATE_REPAYMENT: i128 = 1_000_000;
 
     fn admin_key() -> soroban_sdk::Symbol {
         symbol_short!("ADMIN")
@@ -518,6 +523,11 @@ impl RemittanceNFT {
             return Err(NftError::BelowMinimum);
         }
 
+        // Reject dust repayments that award zero score points (repayment_amount / 100 == 0)
+        // but still incur storage writes and event emissions, enabling low-cost spam.
+        if repayment_amount < Self::MIN_SCORE_UPDATE_REPAYMENT {
+            return Err(NftError::InvalidRepaymentAmount);
+        }
         Self::require_admin_or_authorized_minter(&env, minter)?;
 
         let metadata_key = DataKey::Metadata(user.clone());

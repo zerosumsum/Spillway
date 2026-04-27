@@ -2,14 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard,
-  HandCoins,
-  PiggyBank,
-  SendHorizontal,
-  User,
-  Clock,
-} from "lucide-react";
+import { LayoutDashboard, HandCoins, PiggyBank, SendHorizontal, User, Clock } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { useLocale } from "next-intl";
@@ -40,9 +33,10 @@ export function BottomNav() {
     >
       <div className="flex items-center justify-around px-2 py-2">
         {navItems.map((item) => {
-          const isActive = pathname === `/${locale}${item.href}` || 
+          const isActive =
+            pathname === `/${locale}${item.href}` ||
             (item.href !== "/" && pathname.startsWith(`/${locale}${item.href}`));
-          
+
           return (
             <Link
               key={item.name}
@@ -51,7 +45,7 @@ export function BottomNav() {
                 "flex flex-col items-center justify-center rounded-lg px-3 py-2 text-xs font-medium transition-colors",
                 isActive
                   ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30"
-                  : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                  : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200",
               )}
               aria-current={isActive ? "page" : undefined}
             >

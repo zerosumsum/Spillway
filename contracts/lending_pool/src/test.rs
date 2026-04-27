@@ -980,8 +980,7 @@ fn test_share_price_is_one_to_one_before_any_yield() {
     env.mock_all_auths();
 
     let token_admin = Address::generate(&env);
-    let (token_id, stellar_asset_client, _token_client) =
-        create_token_contract(&env, &token_admin);
+    let (token_id, stellar_asset_client, _token_client) = create_token_contract(&env, &token_admin);
 
     let pool_id = env.register(LendingPool, ());
     let pool_client = LendingPoolClient::new(&env, &pool_id);
@@ -1010,8 +1009,7 @@ fn test_share_price_rises_proportionally_with_yield() {
     env.mock_all_auths();
 
     let token_admin = Address::generate(&env);
-    let (token_id, stellar_asset_client, token_client) =
-        create_token_contract(&env, &token_admin);
+    let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
 
     let pool_id = env.register(LendingPool, ());
     let pool_client = LendingPoolClient::new(&env, &pool_id);
@@ -1043,8 +1041,7 @@ fn test_multiple_depositors_share_yield_proportionally_and_total_shares_track_co
     env.mock_all_auths();
 
     let token_admin = Address::generate(&env);
-    let (token_id, stellar_asset_client, token_client) =
-        create_token_contract(&env, &token_admin);
+    let (token_id, stellar_asset_client, token_client) = create_token_contract(&env, &token_admin);
 
     let pool_id = env.register(LendingPool, ());
     let pool_client = LendingPoolClient::new(&env, &pool_id);

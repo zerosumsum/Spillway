@@ -43,8 +43,28 @@ interface FinancialPerformanceDashboardProps {
 // ─── Mock data generators ──────────────────────────────────────────────────────
 
 const generateMockCreditScoreData = (): CreditScoreDataPoint[] => {
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const events = ["On-time payment", "Loan repaid", "New loan approved", "Payment received", "", ""];
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  const events = [
+    "On-time payment",
+    "Loan repaid",
+    "New loan approved",
+    "Payment received",
+    "",
+    "",
+  ];
 
   return months.map((month, index) => ({
     date: month,
@@ -54,7 +74,20 @@ const generateMockCreditScoreData = (): CreditScoreDataPoint[] => {
 };
 
 const generateMockYieldData = (): YieldDataPoint[] => {
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
 
   return months.map((month, index) => ({
     date: month,
@@ -180,7 +213,9 @@ export function FinancialPerformanceDashboard({
   });
 
   // ── Derived display data ──
-  const displayCreditScoreData = useMockData ? generateMockCreditScoreData() : (creditScoreData ?? []);
+  const displayCreditScoreData = useMockData
+    ? generateMockCreditScoreData()
+    : (creditScoreData ?? []);
   const displayYieldData = useMockData ? generateMockYieldData() : (yieldData ?? []);
 
   const displayLoanStats = useMemo(() => {
@@ -213,9 +248,21 @@ export function FinancialPerformanceDashboard({
     if (useMockData) return generateMockRiskTierData();
     const activeLoans = loans.filter((l) => l.status === "active");
     return [
-      { tier: "Low", count: activeLoans.filter((l) => l.interestRate < 5).length, color: "#10b981" },
-      { tier: "Medium", count: activeLoans.filter((l) => l.interestRate >= 5 && l.interestRate < 10).length, color: "#f59e0b" },
-      { tier: "High", count: activeLoans.filter((l) => l.interestRate >= 10).length, color: "#ef4444" },
+      {
+        tier: "Low",
+        count: activeLoans.filter((l) => l.interestRate < 5).length,
+        color: "#10b981",
+      },
+      {
+        tier: "Medium",
+        count: activeLoans.filter((l) => l.interestRate >= 5 && l.interestRate < 10).length,
+        color: "#f59e0b",
+      },
+      {
+        tier: "High",
+        count: activeLoans.filter((l) => l.interestRate >= 10).length,
+        color: "#ef4444",
+      },
     ];
   }, [useMockData, loans]);
 
@@ -236,7 +283,11 @@ export function FinancialPerformanceDashboard({
   };
 
   const fmt = (n: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    }).format(n);
 
   return (
     <div className="space-y-6">
@@ -256,7 +307,12 @@ export function FinancialPerformanceDashboard({
             performance over time
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleRefresh} className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          className="flex items-center gap-2"
+        >
           <RefreshCw className="h-4 w-4" />
           Refresh
         </Button>

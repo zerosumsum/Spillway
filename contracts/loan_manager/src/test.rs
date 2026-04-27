@@ -2080,8 +2080,14 @@ fn test_refinance_loan_increases_principal_draws_from_pool() {
     assert_eq!(loan.principal_paid, 0); // reset on refinance
     assert_eq!(loan.status, LoanStatus::Approved);
     // Borrower received the additional 1_000 from the pool.
-    assert_eq!(token_client.balance(&borrower), borrower_balance_before + 1_000);
-    assert_eq!(token_client.balance(&pool_client), pool_balance_before - 1_000);
+    assert_eq!(
+        token_client.balance(&borrower),
+        borrower_balance_before + 1_000
+    );
+    assert_eq!(
+        token_client.balance(&pool_client),
+        pool_balance_before - 1_000
+    );
 }
 
 #[test]
@@ -2123,7 +2129,10 @@ fn test_refinance_loan_decreases_principal_returns_excess_to_pool() {
     assert_eq!(loan.principal_paid, 0);
     assert_eq!(loan.status, LoanStatus::Approved);
     // Pool received the 1_000 excess back.
-    assert_eq!(token_client.balance(&pool_client), pool_balance_before + 1_000);
+    assert_eq!(
+        token_client.balance(&pool_client),
+        pool_balance_before + 1_000
+    );
 }
 
 #[test]

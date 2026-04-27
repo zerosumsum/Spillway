@@ -26,7 +26,13 @@ interface RiskTierChartProps {
 export function RiskTierChart({ data, className }: RiskTierChartProps) {
   const total = data.reduce((sum, d) => sum + d.count, 0);
 
-  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: RiskTierDataPoint }[] }) => {
+  const CustomTooltip = ({
+    active,
+    payload,
+  }: {
+    active?: boolean;
+    payload?: { payload: RiskTierDataPoint }[];
+  }) => {
     if (active && payload && payload.length) {
       const d = payload[0].payload;
       const pct = total > 0 ? ((d.count / total) * 100).toFixed(1) : "0.0";
@@ -53,10 +59,7 @@ export function RiskTierChart({ data, className }: RiskTierChartProps) {
       <CardContent>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              className="stroke-gray-200 dark:stroke-zinc-800"
-            />
+            <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-zinc-800" />
             <XAxis
               dataKey="tier"
               tick={{ fill: "currentColor" }}

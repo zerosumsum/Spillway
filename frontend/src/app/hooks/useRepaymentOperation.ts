@@ -162,13 +162,16 @@ export function useDepositOperation(options?: {
 
         // Step 3: Submit to network (new submitted state)
         const submitResult = await submitPoolTransaction(signedTxXdr);
-        transaction.submit(submitResult.txHash, "Transaction submitted, waiting for confirmation...");
+        transaction.submit(
+          submitResult.txHash,
+          "Transaction submitted, waiting for confirmation...",
+        );
 
         // Step 4: Poll for confirmation (new confirming state)
         transaction.confirm("Confirming transaction...");
-        
+
         // Simulate confirmation polling (in real implementation, poll the RPC)
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
 
         // Mark complete
         const txHash = submitResult.txHash;
@@ -250,13 +253,16 @@ export function useWithdrawalOperation(options?: {
 
         // Step 3: Submit to network (new submitted state)
         const submitResult = await submitPoolTransaction(signedTxXdr);
-        transaction.submit(submitResult.txHash, "Transaction submitted, waiting for confirmation...");
+        transaction.submit(
+          submitResult.txHash,
+          "Transaction submitted, waiting for confirmation...",
+        );
 
         // Step 4: Poll for confirmation (new confirming state)
         transaction.confirm("Confirming transaction...");
-        
+
         // Simulate confirmation polling (in real implementation, poll the RPC)
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
 
         // Mark complete
         const txHash = submitResult.txHash;

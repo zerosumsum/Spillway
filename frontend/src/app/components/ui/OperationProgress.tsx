@@ -1,14 +1,14 @@
 "use client";
 
-import { 
-  AlertCircle, 
-  CheckCircle2, 
-  Loader, 
-  ArrowUpRight, 
+import {
+  AlertCircle,
+  CheckCircle2,
+  Loader,
+  ArrowUpRight,
   ArrowDownLeft,
   Loader2,
   Send,
-  Clock
+  Clock,
 } from "lucide-react";
 import { OptimisticUIStore, type TransactionStatus } from "../../hooks/useOptimisticUI";
 import clsx from "clsx";
@@ -80,18 +80,19 @@ export function OperationProgress({ transaction, type = "generic" }: OperationPr
         </div>
 
         {/* Show explorer link for submitted, confirming, and confirmed states */}
-        {txHash && (status === "submitted" || status === "confirming" || status === "confirmed") && (
-          <a
-            href={`https://stellar.expert/explorer/testnet/tx/${txHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`View transaction ${txHash.slice(0, 8)}… on Stellar Explorer (opens in new tab)`}
-            className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline flex items-center gap-1"
-          >
-            <Clock className="h-3 w-3" />
-            View TX
-          </a>
-        )}
+        {txHash &&
+          (status === "submitted" || status === "confirming" || status === "confirmed") && (
+            <a
+              href={`https://stellar.expert/explorer/testnet/tx/${txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`View transaction ${txHash.slice(0, 8)}… on Stellar Explorer (opens in new tab)`}
+              className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline flex items-center gap-1"
+            >
+              <Clock className="h-3 w-3" />
+              View TX
+            </a>
+          )}
       </div>
 
       {showProgress && progress !== undefined && progress > 0 && (

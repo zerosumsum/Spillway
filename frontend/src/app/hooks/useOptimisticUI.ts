@@ -4,12 +4,12 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { useState, useEffect } from "react";
 
-export type TransactionStatus = 
-  | "idle" 
-  | "signing" 
-  | "submitted" 
-  | "confirming" 
-  | "confirmed" 
+export type TransactionStatus =
+  | "idle"
+  | "signing"
+  | "submitted"
+  | "confirming"
+  | "confirmed"
   | "failed";
 
 export interface TransactionState {
@@ -225,7 +225,8 @@ export function useTransaction(id: string) {
   return {
     transaction,
     start: (message: string) => store.startTransaction(id, message),
-    updateProgress: (progress: number, message?: string) => store.updateProgress(id, progress, message),
+    updateProgress: (progress: number, message?: string) =>
+      store.updateProgress(id, progress, message),
     complete: (txHash?: string, message?: string) => store.completeTransaction(id, txHash, message),
     submit: (txHash: string, message?: string) => store.submitTransaction(id, txHash, message),
     confirm: (message?: string) => store.confirmTransaction(id, message),

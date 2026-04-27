@@ -162,6 +162,7 @@ impl LoanManager {
     const MIN_RATE_BPS: u32 = 1; // Minimum 0.01% interest rate
     /// Default maximum interest rate (configurable via set_rate_bounds). #631
     const MAX_RATE_BPS: u32 = 100_000; // Maximum 1000% interest rate
+    const MAX_PENALTY_MULTIPLIER: i128 = 2; // Total debt cannot exceed 2x original principal
 
     fn bump_instance_ttl(env: &Env) {
         env.storage()
@@ -342,7 +343,7 @@ impl LoanManager {
         let elapsed_ledgers = current_ledger - loan.last_interest_ledger;
         const PRECISION: i128 = 1_000_000;
 
-        // Calculate interest with high precision to avoid truncation for small loans
+        // Calculate interest with high precision. Intermediate values are checked for overflow.
         let numerator = remaining_principal
             .checked_mul(loan.interest_rate_bps as i128)
             .and_then(|v| v.checked_mul(elapsed_ledgers as i128))
@@ -362,10 +363,13 @@ impl LoanManager {
         let additional_interest = combined_residual / PRECISION;
         let final_residual = combined_residual % PRECISION;
 
+        let total_accrued_delta = interest_delta
+            .checked_add(additional_interest)
+            .ok_or(LoanError::AmountTooLarge)?;
+
         loan.accrued_interest = loan
             .accrued_interest
-            .checked_add(interest_delta)
-            .and_then(|v| v.checked_add(additional_interest))
+            .checked_add(total_accrued_delta)
             .ok_or(LoanError::AmountTooLarge)?;
         loan.interest_residual = final_residual;
         loan.last_interest_ledger = current_ledger;
@@ -563,33 +567,36 @@ impl LoanManager {
         }
 
         let remaining_principal = Self::remaining_principal(loan);
-        if remaining_principal <= 0 {
+        let debt_before_late_fees = remaining_principal
+            .checked_add(loan.accrued_interest)
+            .expect("debt overflow");
+
+        // Stop accruing fees if principal + interest is fully paid
+        if debt_before_late_fees <= 0 {
             loan.last_late_fee_ledger = current_ledger;
             return 0;
         }
 
-        let remaining_debt = remaining_principal
-            .checked_add(loan.accrued_interest)
-            .expect("debt overflow");
-
         let overdue_ledgers = current_ledger - late_fee_start;
-        let incremental_fee = remaining_debt
+        let incremental_fee = debt_before_late_fees
             .checked_mul(Self::late_fee_rate_bps(env) as i128)
             .and_then(|value| value.checked_mul(overdue_ledgers as i128))
             .and_then(|value| value.checked_div(10_000))
             .and_then(|value| value.checked_div(Self::DEFAULT_TERM_LEDGERS as i128))
             .expect("late fee overflow");
 
-        let fee_cap = loan
+        // Global debt cap: Total outstanding (principal + interest + late fees)
+        // cannot exceed original_principal * MAX_PENALTY_MULTIPLIER.
+        let max_total_debt = loan
             .amount
-            .checked_mul(Self::MAX_LATE_FEE_CAP_BPS as i128)
-            .and_then(|value| value.checked_div(10_000))
-            .expect("late fee overflow");
-        let total_late_fees = loan
-            .accrued_late_fee
-            .checked_add(loan.late_fee_paid)
-            .expect("late fee overflow");
-        let remaining_fee_capacity = fee_cap.checked_sub(total_late_fees).unwrap_or(0);
+            .checked_mul(Self::MAX_PENALTY_MULTIPLIER)
+            .expect("debt cap overflow");
+
+        let current_total_debt = debt_before_late_fees
+            .checked_add(loan.accrued_late_fee)
+            .expect("debt overflow");
+
+        let remaining_fee_capacity = max_total_debt.checked_sub(current_total_debt).unwrap_or(0);
 
         let charged_fee = if remaining_fee_capacity <= 0 {
             0
@@ -1109,6 +1116,7 @@ impl LoanManager {
 
         Ok(())
     }
+
 
     pub fn get_loan(env: Env, loan_id: u32) -> Result<Loan, LoanError> {
         let loan_key = DataKey::Loan(loan_id);

@@ -752,7 +752,7 @@
                             "symbol": "reason"
                           },
                           "val": {
-                            "symbol": "REPAY"
+                            "symbol": "ADJ"
                           }
                         }
                       ]
@@ -1727,6 +1727,24 @@
                         },
                         "val": {
                           "address": "CCABDO7UZXYE4W6GVSEGSNNZTKSLFQGKXXQTH6OX7M7GKZ4Z6CUJNGZN"
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "TotalOutstanding"
+                            },
+                            {
+                              "address": "CCABDO7UZXYE4W6GVSEGSNNZTKSLFQGKXXQTH6OX7M7GKZ4Z6CUJNGZN"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "i128": {
+                            "hi": 0,
+                            "lo": 500
+                          }
                         }
                       },
                       {

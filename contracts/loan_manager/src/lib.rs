@@ -59,7 +59,7 @@ pub enum LoanError {
     MaxExtensionsReached = 24,
     InvalidExtension = 25,
     InsufficientCollateral = 26,
-    LoanNotLiquidatable = 23,
+    LoanNotLiquidatable = 27,
 }
 
 #[contracttype]
@@ -1110,88 +1110,6 @@ impl LoanManager {
         Ok(())
     }
 
-    pub fn extend_loan(env: Env, loan_id: u32, new_due_ledger: u32) -> Result<(), LoanError> {
-        use soroban_sdk::token::TokenClient;
-
-        Self::require_not_paused(&env)?;
-
-        let loan_key = DataKey::Loan(loan_id);
-        let mut loan: Loan = env
-            .storage()
-            .persistent()
-            .get(&loan_key)
-            .ok_or(LoanError::LoanNotFound)?;
-        Self::bump_persistent_ttl(&env, &loan_key);
-
-        loan.borrower.require_auth();
-
-        if loan.status != LoanStatus::Approved {
-            return Err(LoanError::LoanNotActive);
-        }
-        if new_due_ledger <= loan.due_date {
-            return Err(LoanError::InvalidExtension);
-        }
-
-        const MAX_EXTENSIONS: u32 = 2;
-        if loan.extension_count >= MAX_EXTENSIONS {
-            return Err(LoanError::MaxExtensionsReached);
-        }
-
-        // Charge an extension fee out of posted collateral.
-        const EXTENSION_FEE_BPS: i128 = 50; // 0.50%
-        let fee_amount = loan
-            .amount
-            .checked_mul(EXTENSION_FEE_BPS)
-            .and_then(|value| value.checked_div(10_000))
-            .ok_or(LoanError::AmountTooLarge)?;
-
-        if fee_amount > 0 {
-            if loan.collateral_amount < fee_amount {
-                return Err(LoanError::InsufficientCollateral);
-            }
-            loan.collateral_amount = loan
-                .collateral_amount
-                .checked_sub(fee_amount)
-                .ok_or(LoanError::AmountTooLarge)?;
-
-            let lending_pool: Address = env
-                .storage()
-                .instance()
-                .get(&DataKey::LendingPool)
-                .ok_or(LoanError::NotInitialized)?;
-            let token: Address = env
-                .storage()
-                .instance()
-                .get(&DataKey::Token)
-                .ok_or(LoanError::NotInitialized)?;
-            let token_client = TokenClient::new(&env, &token);
-            token_client.transfer(&env.current_contract_address(), &lending_pool, &fee_amount);
-        }
-
-        loan.due_date = new_due_ledger;
-        loan.last_late_fee_ledger = new_due_ledger
-            .checked_add(Self::grace_period_ledgers(&env))
-            .ok_or(LoanError::AmountTooLarge)?;
-        loan.extension_count = loan
-            .extension_count
-            .checked_add(1)
-            .ok_or(LoanError::AmountTooLarge)?;
-
-        env.storage().persistent().set(&loan_key, &loan);
-        Self::bump_persistent_ttl(&env, &loan_key);
-
-        events::loan_extended(
-            &env,
-            loan_id,
-            loan.borrower.clone(),
-            new_due_ledger,
-            fee_amount,
-            loan.extension_count,
-        );
-
-        Ok(())
-    }
-
     pub fn get_loan(env: Env, loan_id: u32) -> Result<Loan, LoanError> {
         let loan_key = DataKey::Loan(loan_id);
         let mut loan: Loan = env
@@ -1353,11 +1271,25 @@ impl LoanManager {
                         &Some(env.current_contract_address()),
                     );
                 } else {
-                    nft_client.update_score(
-                        &borrower,
-                        &amount,
-                        &Some(env.current_contract_address()),
-                    );
+                    // Use apply_score_delta rather than update_score so score adjustments
+                    // work for any token denomination without hitting RemittanceNFT's
+                    // anti-dust repayment floor (which assumes XLM stroops).
+                    let points_i128 = amount / 100;
+                    let points_i32 = if points_i128 > i32::MAX as i128 {
+                        i32::MAX
+                    } else if points_i128 <= 0 {
+                        0
+                    } else {
+                        points_i128 as i32
+                    };
+
+                    if points_i32 > 0 {
+                        let _ = nft_client.apply_score_delta(
+                            &borrower,
+                            &points_i32,
+                            &Some(env.current_contract_address()),
+                        );
+                    }
                 }
             }
         }
@@ -1439,8 +1371,6 @@ impl LoanManager {
     }
 
     pub fn release_collateral(env: Env, loan_id: u32) -> Result<(), LoanError> {
-        Self::require_not_paused(&env)?;
-
         let loan_key = DataKey::Loan(loan_id);
         let loan: Loan = env
             .storage()
@@ -1483,7 +1413,7 @@ impl LoanManager {
         }
 
         let total_debt = {
-            let (current_total_debt, _) = Self::current_total_debt(&env, &mut loan);
+            let (current_total_debt, _) = Self::current_total_debt(&env, &mut loan)?;
             current_total_debt
         };
         let threshold_bps = Self::liquidation_threshold_bps(&env);
@@ -1566,7 +1496,6 @@ impl LoanManager {
 
     pub fn cancel_loan(env: Env, borrower: Address, loan_id: u32) -> Result<(), LoanError> {
         borrower.require_auth();
-        Self::require_not_paused(&env)?;
 
         let loan_key = DataKey::Loan(loan_id);
         let mut loan: Loan = env
@@ -1608,7 +1537,6 @@ impl LoanManager {
 
     pub fn reject_loan(env: Env, loan_id: u32, reason: String) -> Result<(), LoanError> {
         Self::admin(&env).require_auth();
-        Self::require_not_paused(&env)?;
 
         let loan_key = DataKey::Loan(loan_id);
         let mut loan: Loan = env
@@ -2437,7 +2365,14 @@ impl LoanManager {
         Self::bump_persistent_ttl(&env, &loan_key);
 
         // Emit extension event
-        events::loan_extended(&env, loan_id, borrower, new_due_date, extension_fee);
+        events::loan_extended(
+            &env,
+            loan_id,
+            borrower,
+            new_due_date,
+            extension_fee,
+            loan.extension_count,
+        );
 
         Ok(())
     }

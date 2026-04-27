@@ -138,7 +138,7 @@ export interface Loan {
   currency: string;
   interestRate: number;
   termDays: number;
-  status: "pending" | "active" | "repaid" | "defaulted";
+  status: "pending" | "active" | "repaid" | "defaulted" | "liquidated";
   borrowerId: string;
   createdAt: string;
 }
@@ -200,7 +200,7 @@ export interface BorrowerLoan {
   totalOwed: number;
   totalRepaid: number;
   nextPaymentDeadline: string;
-  status: "active" | "pending" | "repaid";
+  status: "active" | "pending" | "repaid" | "defaulted" | "liquidated";
   borrower: string;
   approvedAt?: string;
 }

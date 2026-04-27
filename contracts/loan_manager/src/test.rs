@@ -272,7 +272,7 @@ fn test_paused_blocks_new_loans_and_repayments_but_allows_collateral_release() {
 
     // Pause the contract.
     manager.pause();
-    assert_eq!(manager.is_paused(), true);
+    assert!(manager.is_paused());
 
     // New loan requests are blocked.
     let blocked_request = manager.try_request_loan(&borrower, &500, &17280);
@@ -294,7 +294,7 @@ fn test_paused_blocks_new_loans_and_repayments_but_allows_collateral_release() {
 
     // Unpause restores normal operations.
     manager.unpause();
-    assert_eq!(manager.is_paused(), false);
+    assert!(!manager.is_paused());
 
     // Now repay should succeed (partial repay).
     manager.repay(&borrower, &loan_b, &100);

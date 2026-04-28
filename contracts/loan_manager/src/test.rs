@@ -90,7 +90,13 @@ fn test_migration_guard_prevents_double_execution() {
 
     // Create some pre-migration data
     let history_hash = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
-    nft_client.mint(&borrower, &600, &history_hash, &None);
+    nft_client.mint(
+        &borrower,
+        &600,
+        &history_hash,
+        &soroban_sdk::String::from_str(&env, "ipfs://QmTest"),
+        &None,
+    );
 
     let stellar_token = StellarAssetClient::new(&env, &token_id);
     stellar_token.mint(&pool_client, &10_000);
@@ -1528,7 +1534,13 @@ fn test_liquidation_bonus_cap_enforced() {
     let liquidator = Address::generate(&env);
 
     let history_hash = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
-    nft_client.mint(&borrower, &650, &history_hash, &None);
+    nft_client.mint(
+        &borrower,
+        &650,
+        &history_hash,
+        &soroban_sdk::String::from_str(&env, "ipfs://QmTest"),
+        &None,
+    );
 
     let token_client = TokenClient::new(&env, &token_id);
     let stellar_token = StellarAssetClient::new(&env, &token_id);

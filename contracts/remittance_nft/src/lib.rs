@@ -143,8 +143,8 @@ impl RemittanceNFT {
 
     fn validate_metadata_uri(env: &Env, uri: &String) -> Result<(), NftError> {
         // Check if URI starts with "ipfs://" or "https://"
-        let ipfs_prefix = String::from_str(env, "ipfs://");
-        let https_prefix = String::from_str(env, "https://");
+        let _ipfs_prefix = String::from_str(env, "ipfs://");
+        let _https_prefix = String::from_str(env, "https://");
 
         // Simple validation: check if the URI has a reasonable length and starts with valid prefix
         // We can't do complex string operations in no_std, so we do basic checks

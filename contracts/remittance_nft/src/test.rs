@@ -542,8 +542,20 @@ fn test_score_update_is_isolated_to_owner() {
 
     client.initialize(&admin);
 
-    client.mint(&alice, &100, &create_test_hash(&env, 1), &None);
-    client.mint(&bob, &200, &create_test_hash(&env, 2), &None);
+    client.mint(
+        &alice,
+        &100,
+        &create_test_hash(&env, 1),
+        &create_test_uri(&env),
+        &None,
+    );
+    client.mint(
+        &bob,
+        &200,
+        &create_test_hash(&env, 2),
+        &create_test_uri(&env),
+        &None,
+    );
 
     client.update_score(&alice, &900, &None);
 
@@ -642,7 +654,13 @@ fn test_score_history_tracks_and_caps_recent_updates() {
     let client = RemittanceNFTClient::new(&env, &contract_id);
 
     client.initialize(&admin);
-    client.mint(&user, &500, &create_test_hash(&env, 7), &None);
+    client.mint(
+        &user,
+        &500,
+        &create_test_hash(&env, 7),
+        &create_test_uri(&env),
+        &None,
+    );
 
     // Add 52 updates — exceeds MAX_SCORE_HISTORY_ENTRIES (50)
     for sequence in 1..=52u32 {
@@ -680,7 +698,13 @@ fn test_burn_blocks_authorized_remint_without_admin_approval() {
 
     client.initialize(&admin);
     client.authorize_minter(&authorized_minter);
-    client.mint(&user, &500, &create_test_hash(&env, 4), &None);
+    client.mint(
+        &user,
+        &500,
+        &create_test_hash(&env, 4),
+        &create_test_uri(&env),
+        &None,
+    );
 
     client.burn(&user, &None);
     assert!(client.get_metadata(&user).is_none());
@@ -689,6 +713,7 @@ fn test_burn_blocks_authorized_remint_without_admin_approval() {
         &user,
         &650,
         &create_test_hash(&env, 5),
+        &create_test_uri(&env),
         &Some(authorized_minter),
     );
 }
@@ -712,6 +737,7 @@ fn test_approve_remint_allows_authorized_minter_remint() {
         &user,
         &650,
         &BytesN::from_array(&env, &[5u8; 32]),
+        &create_test_uri(&env),
         &Some(minter.clone()),
     );
     client.burn(&user, &None);
@@ -722,6 +748,7 @@ fn test_approve_remint_allows_authorized_minter_remint() {
         &user,
         &650,
         &BytesN::from_array(&env, &[5u8; 32]),
+        &create_test_uri(&env),
         &Some(minter.clone()),
     );
     assert_eq!(result, Err(Ok(NftError::BurnedRequiresApproval)));
@@ -731,7 +758,8 @@ fn test_approve_remint_allows_authorized_minter_remint() {
     client.admin_remint(
         &user,
         &650,
-        &BytesN::from_array(&env, &[5u8; 32], &create_test_uri(&env)),
+        &BytesN::from_array(&env, &[5u8; 32]),
+        &create_test_uri(&env),
     );
     assert_eq!(client.get_score(&user), 650);
 }
@@ -749,7 +777,13 @@ fn test_record_default_auto_burns_after_threshold() {
 
     client.initialize(&admin);
     client.set_default_burn_threshold(&2);
-    client.mint(&user, &500, &create_test_hash(&env, 6), &None);
+    client.mint(
+        &user,
+        &500,
+        &create_test_hash(&env, 6),
+        &create_test_uri(&env),
+        &None,
+    );
 
     client.record_default(&user, &None);
     assert_eq!(client.get_default_count(&user), 1);
@@ -776,7 +810,13 @@ fn test_transfer_moves_identity_state_to_new_wallet() {
     let client = RemittanceNFTClient::new(&env, &contract_id);
 
     client.initialize(&admin);
-    client.mint(&old_wallet, &500, &create_test_hash(&env, 21), &None);
+    client.mint(
+        &old_wallet,
+        &500,
+        &create_test_hash(&env, 21),
+        &create_test_uri(&env),
+        &None,
+    );
     client.update_score(&old_wallet, &300, &None);
     client.record_default(&old_wallet, &None);
 
@@ -811,7 +851,13 @@ fn test_transfer_enforces_cooldown_before_retransfer() {
     let client = RemittanceNFTClient::new(&env, &contract_id);
 
     client.initialize(&admin);
-    client.mint(&wallet_a, &500, &create_test_hash(&env, 22), &None);
+    client.mint(
+        &wallet_a,
+        &500,
+        &create_test_hash(&env, 22),
+        &create_test_uri(&env),
+        &None,
+    );
     client.transfer(&wallet_a, &wallet_b, &None);
 
     client.transfer(&wallet_b, &wallet_c, &None);
@@ -831,8 +877,20 @@ fn test_transfer_rejects_destination_with_existing_state() {
     let client = RemittanceNFTClient::new(&env, &contract_id);
 
     client.initialize(&admin);
-    client.mint(&from, &500, &create_test_hash(&env, 23), &None);
-    client.mint(&to, &450, &create_test_hash(&env, 24), &None);
+    client.mint(
+        &from,
+        &500,
+        &create_test_hash(&env, 23),
+        &create_test_uri(&env),
+        &None,
+    );
+    client.mint(
+        &to,
+        &450,
+        &create_test_hash(&env, 24),
+        &create_test_uri(&env),
+        &None,
+    );
 
     client.transfer(&from, &to, &None);
 }
@@ -852,7 +910,13 @@ fn test_transfer_rejects_unauthorized_minter() {
     let client = RemittanceNFTClient::new(&env, &contract_id);
 
     client.initialize(&admin);
-    client.mint(&from, &500, &create_test_hash(&env, 25), &None);
+    client.mint(
+        &from,
+        &500,
+        &create_test_hash(&env, 25),
+        &create_test_uri(&env),
+        &None,
+    );
 
     client.transfer(&from, &to, &Some(unauthorized_minter));
 }
@@ -920,7 +984,13 @@ fn test_get_transfer_cooldown_remaining_no_cooldown() {
     let client = RemittanceNFTClient::new(&env, &contract_id);
 
     client.initialize(&admin);
-    client.mint(&user, &500, &create_test_hash(&env, 1), &None);
+    client.mint(
+        &user,
+        &500,
+        &create_test_hash(&env, 1),
+        &create_test_uri(&env),
+        &None,
+    );
 
     assert_eq!(client.get_transfer_cooldown_remaining(&user), 0);
 }
@@ -939,7 +1009,13 @@ fn test_get_transfer_cooldown_remaining_active() {
 
     client.initialize(&admin);
     env.ledger().set_sequence_number(100);
-    client.mint(&from, &500, &create_test_hash(&env, 30), &None);
+    client.mint(
+        &from,
+        &500,
+        &create_test_hash(&env, 30),
+        &create_test_uri(&env),
+        &None,
+    );
     client.transfer(&from, &to, &None);
 
     // Cooldown is 17280 ledgers. At sequence 100, next allowed is 100 + 17280 = 17380.
@@ -964,7 +1040,13 @@ fn test_get_transfer_cooldown_remaining_expired() {
 
     client.initialize(&admin);
     env.ledger().set_sequence_number(100);
-    client.mint(&from, &500, &create_test_hash(&env, 31), &None);
+    client.mint(
+        &from,
+        &500,
+        &create_test_hash(&env, 31),
+        &create_test_uri(&env),
+        &None,
+    );
     client.transfer(&from, &to, &None);
 
     // Advance past the cooldown
@@ -1000,7 +1082,13 @@ fn test_is_remint_approved_true_after_approval() {
     let client = RemittanceNFTClient::new(&env, &contract_id);
 
     client.initialize(&admin);
-    client.mint(&user, &500, &create_test_hash(&env, 32), &None);
+    client.mint(
+        &user,
+        &500,
+        &create_test_hash(&env, 32),
+        &create_test_uri(&env),
+        &None,
+    );
     client.burn(&user, &None);
     client.approve_remint(&user);
 
@@ -1019,7 +1107,13 @@ fn test_is_remint_approved_cleared_after_remint() {
 
     client.initialize(&admin);
 
-    client.mint(&user, &500, &BytesN::from_array(&env, &[1u8; 32]), &None);
+    client.mint(
+        &user,
+        &500,
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &create_test_uri(&env),
+        &None,
+    );
     client.burn(&user, &None);
     client.approve_remint(&user);
 
@@ -1028,7 +1122,8 @@ fn test_is_remint_approved_cleared_after_remint() {
     client.admin_remint(
         &user,
         &600,
-        &BytesN::from_array(&env, &[0x22u8; 32], &create_test_uri(&env)),
+        &BytesN::from_array(&env, &[0x22u8; 32]),
+        &create_test_uri(&env),
     );
 
     assert!(!client.is_remint_approved(&user));
@@ -1105,7 +1200,13 @@ fn test_new_admin_can_act_after_transfer() {
     client.accept_admin();
 
     // New admin should be able to mint
-    client.mint(&user, &500, &create_test_hash(&env, 40), &None);
+    client.mint(
+        &user,
+        &500,
+        &create_test_hash(&env, 40),
+        &create_test_uri(&env),
+        &None,
+    );
     assert_eq!(client.get_score(&user), 500);
 }
 
@@ -1147,11 +1248,22 @@ fn test_remint_requires_approval() {
     let user = Address::generate(&env);
 
     client.initialize(&admin);
-    client.mint(&user, &500, &BytesN::from_array(&env, &[1u8; 32]), &None);
+    client.mint(
+        &user,
+        &500,
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &create_test_uri(&env),
+        &None,
+    );
     client.burn(&user, &None);
 
     // admin_remint without approval should fail
-    let result = client.try_admin_remint(&user, &500, &BytesN::from_array(&env, &[1u8; 32]));
+    let result = client.try_admin_remint(
+        &user,
+        &500,
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &create_test_uri(&env),
+    );
     assert_eq!(result, Err(Ok(NftError::RemintNotApproved)));
 
     // Grant approval then remint succeeds
@@ -1159,7 +1271,8 @@ fn test_remint_requires_approval() {
     client.admin_remint(
         &user,
         &500,
-        &BytesN::from_array(&env, &[1u8; 32], &create_test_uri(&env)),
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &create_test_uri(&env),
     );
     assert_eq!(client.get_score(&user), 500);
 }
@@ -1177,18 +1290,30 @@ fn test_remint_approval_is_single_use() {
     client.initialize(&admin);
 
     // Mint, burn, approve, remint
-    client.mint(&user, &500, &BytesN::from_array(&env, &[1u8; 32]), &None);
+    client.mint(
+        &user,
+        &500,
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &create_test_uri(&env),
+        &None,
+    );
     client.burn(&user, &None);
     client.approve_remint(&user);
     client.admin_remint(
         &user,
         &500,
-        &BytesN::from_array(&env, &[1u8; 32], &create_test_uri(&env)),
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &create_test_uri(&env),
     );
 
     // Approval was consumed — burn and try again without new approval
     client.burn(&user, &None);
-    let result = client.try_admin_remint(&user, &500, &BytesN::from_array(&env, &[1u8; 32]));
+    let result = client.try_admin_remint(
+        &user,
+        &500,
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &create_test_uri(&env),
+    );
     assert_eq!(result, Err(Ok(NftError::RemintNotApproved)));
 
     // Second approval unblocks it
@@ -1196,7 +1321,8 @@ fn test_remint_approval_is_single_use() {
     client.admin_remint(
         &user,
         &500,
-        &BytesN::from_array(&env, &[1u8; 32], &create_test_uri(&env)),
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &create_test_uri(&env),
     );
     assert_eq!(client.get_score(&user), 500);
 }
@@ -1213,7 +1339,13 @@ fn test_remint_approval_consumed_after_use() {
 
     client.initialize(&admin);
 
-    client.mint(&user, &500, &BytesN::from_array(&env, &[1u8; 32]), &None);
+    client.mint(
+        &user,
+        &500,
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &create_test_uri(&env),
+        &None,
+    );
     client.burn(&user, &None);
     client.approve_remint(&user);
 
@@ -1222,7 +1354,8 @@ fn test_remint_approval_consumed_after_use() {
     client.admin_remint(
         &user,
         &500,
-        &BytesN::from_array(&env, &[1u8; 32], &create_test_uri(&env)),
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &create_test_uri(&env),
     );
 
     // Approval was consumed
@@ -1242,7 +1375,13 @@ fn test_first_time_mint_does_not_require_approval() {
     client.initialize(&admin);
 
     // First mint never requires approval
-    client.mint(&user, &600, &BytesN::from_array(&env, &[1u8; 32]), &None);
+    client.mint(
+        &user,
+        &600,
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &create_test_uri(&env),
+        &None,
+    );
     assert_eq!(client.get_score(&user), 600);
 }
 
@@ -1257,11 +1396,22 @@ fn test_admin_remint_requires_approval() {
     let user = Address::generate(&env);
 
     client.initialize(&admin);
-    client.mint(&user, &500, &BytesN::from_array(&env, &[1u8; 32]), &None);
+    client.mint(
+        &user,
+        &500,
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &create_test_uri(&env),
+        &None,
+    );
     client.burn(&user, &None);
 
     // admin_remint without approval should fail
-    let result = client.try_admin_remint(&user, &500, &BytesN::from_array(&env, &[1u8; 32]));
+    let result = client.try_admin_remint(
+        &user,
+        &500,
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &create_test_uri(&env),
+    );
     assert_eq!(result, Err(Ok(NftError::RemintNotApproved)));
 }
 
@@ -1276,14 +1426,21 @@ fn test_admin_remint_succeeds_with_approval() {
     let user = Address::generate(&env);
 
     client.initialize(&admin);
-    client.mint(&user, &500, &BytesN::from_array(&env, &[1u8; 32]), &None);
+    client.mint(
+        &user,
+        &500,
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &create_test_uri(&env),
+        &None,
+    );
     client.burn(&user, &None);
     client.approve_remint(&user);
 
     client.admin_remint(
         &user,
         &400,
-        &BytesN::from_array(&env, &[2u8; 32], &create_test_uri(&env)),
+        &BytesN::from_array(&env, &[2u8; 32]),
+        &create_test_uri(&env),
     );
     assert_eq!(client.get_score(&user), 400);
     assert!(!client.is_remint_approved(&user));
@@ -1302,7 +1459,12 @@ fn test_admin_remint_fails_for_non_burned_user() {
     client.initialize(&admin);
 
     // User was never burned — admin_remint should fail
-    let result = client.try_admin_remint(&user, &500, &BytesN::from_array(&env, &[1u8; 32]));
+    let result = client.try_admin_remint(
+        &user,
+        &500,
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &create_test_uri(&env),
+    );
     assert_eq!(result, Err(Ok(NftError::NftNotFound)));
 }
 
@@ -1317,12 +1479,24 @@ fn test_mint_rejects_burned_user_and_redirects_to_admin_remint() {
     let user = Address::generate(&env);
 
     client.initialize(&admin);
-    client.mint(&user, &500, &BytesN::from_array(&env, &[1u8; 32]), &None);
+    client.mint(
+        &user,
+        &500,
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &create_test_uri(&env),
+        &None,
+    );
     client.burn(&user, &None);
 
     // mint() must reject burned users — even with approval
     client.approve_remint(&user);
-    let result = client.try_mint(&user, &500, &BytesN::from_array(&env, &[1u8; 32]), &None);
+    let result = client.try_mint(
+        &user,
+        &500,
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &create_test_uri(&env),
+        &None,
+    );
     assert_eq!(result, Err(Ok(NftError::BurnedRequiresApproval)));
 }
 
@@ -1337,7 +1511,13 @@ fn test_admin_remint_clears_seized_flag() {
     let user = Address::generate(&env);
 
     client.initialize(&admin);
-    client.mint(&user, &500, &BytesN::from_array(&env, &[1u8; 32]), &None);
+    client.mint(
+        &user,
+        &500,
+        &BytesN::from_array(&env, &[1u8; 32]),
+        &create_test_uri(&env),
+        &None,
+    );
     client.seize_collateral(&user, &None);
 
     // Confirm seized before burn
@@ -1351,7 +1531,8 @@ fn test_admin_remint_clears_seized_flag() {
     client.admin_remint(
         &user,
         &300,
-        &BytesN::from_array(&env, &[2u8; 32], &create_test_uri(&env)),
+        &BytesN::from_array(&env, &[2u8; 32]),
+        &create_test_uri(&env),
     );
 
     assert!(!client.is_seized(&user));
@@ -1394,12 +1575,24 @@ fn test_score_bounds_enforced() {
     client.initialize(&admin);
 
     // Test lower bound (300)
-    client.mint(&user, &200, &create_test_hash(&env, 1), &None);
+    client.mint(
+        &user,
+        &200,
+        &create_test_hash(&env, 1),
+        &create_test_uri(&env),
+        &None,
+    );
     assert_eq!(client.get_score(&user), 200); // Mint doesn't enforce MIN, only MAX
 
     // Test upper bound (850)
     let user2 = Address::generate(&env);
-    client.mint(&user2, &900, &create_test_hash(&env, 2), &None);
+    client.mint(
+        &user2,
+        &900,
+        &create_test_hash(&env, 2),
+        &create_test_uri(&env),
+        &None,
+    );
     assert_eq!(client.get_score(&user2), 850); // Capped at MAX_SCORE
 }
 
@@ -1415,7 +1608,13 @@ fn test_update_score_within_bounds() {
     let client = RemittanceNFTClient::new(&env, &contract_id);
 
     client.initialize(&admin);
-    client.mint(&user, &500, &create_test_hash(&env, 1), &None);
+    client.mint(
+        &user,
+        &500,
+        &create_test_hash(&env, 1),
+        &create_test_uri(&env),
+        &None,
+    );
 
     // Update within bounds
     client.update_score(&user, &1000, &None);
@@ -1438,7 +1637,13 @@ fn test_apply_score_delta_clamps_at_max() {
     let client = RemittanceNFTClient::new(&env, &contract_id);
 
     client.initialize(&admin);
-    client.mint(&user, &800, &create_test_hash(&env, 1), &None);
+    client.mint(
+        &user,
+        &800,
+        &create_test_hash(&env, 1),
+        &create_test_uri(&env),
+        &None,
+    );
 
     // Apply delta that would exceed max
     client.apply_score_delta(&user, &100, &None);
@@ -1461,7 +1666,13 @@ fn test_lock_and_unlock_nft() {
     let client = RemittanceNFTClient::new(&env, &contract_id);
 
     client.initialize(&admin);
-    client.mint(&user, &500, &create_test_hash(&env, 1), &None);
+    client.mint(
+        &user,
+        &500,
+        &create_test_hash(&env, 1),
+        &create_test_uri(&env),
+        &None,
+    );
 
     // Seize (lock) collateral
     assert!(!client.is_seized(&user));
@@ -1484,7 +1695,13 @@ fn test_burn_removes_nft() {
     let client = RemittanceNFTClient::new(&env, &contract_id);
 
     client.initialize(&admin);
-    client.mint(&user, &500, &create_test_hash(&env, 1), &None);
+    client.mint(
+        &user,
+        &500,
+        &create_test_hash(&env, 1),
+        &create_test_uri(&env),
+        &None,
+    );
 
     assert!(client.get_metadata(&user).is_some());
     assert_eq!(client.get_score(&user), 500);
@@ -1509,7 +1726,13 @@ fn test_seize_collateral_by_authorized_only() {
 
     client.initialize(&admin);
     client.authorize_minter(&authorized_minter);
-    client.mint(&user, &500, &create_test_hash(&env, 1), &None);
+    client.mint(
+        &user,
+        &500,
+        &create_test_hash(&env, 1),
+        &create_test_uri(&env),
+        &None,
+    );
 
     // Admin can seize
     client.seize_collateral(&user, &None);
@@ -1517,7 +1740,13 @@ fn test_seize_collateral_by_authorized_only() {
 
     // Authorized minter can also seize
     let user2 = Address::generate(&env);
-    client.mint(&user2, &500, &create_test_hash(&env, 2), &None);
+    client.mint(
+        &user2,
+        &500,
+        &create_test_hash(&env, 2),
+        &create_test_uri(&env),
+        &None,
+    );
     client.seize_collateral(&user2, &Some(authorized_minter));
     assert!(client.is_seized(&user2));
 }
@@ -1534,7 +1763,13 @@ fn test_score_history_max_50_entries() {
     let client = RemittanceNFTClient::new(&env, &contract_id);
 
     client.initialize(&admin);
-    client.mint(&user, &500, &create_test_hash(&env, 1), &None);
+    client.mint(
+        &user,
+        &500,
+        &create_test_hash(&env, 1),
+        &create_test_uri(&env),
+        &None,
+    );
 
     // Add 60 score updates (exceeds MAX_SCORE_HISTORY_ENTRIES of 50)
     for sequence in 1..=60u32 {

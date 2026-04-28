@@ -145,13 +145,13 @@ impl RemittanceNFT {
         // Check if URI starts with "ipfs://" or "https://"
         let ipfs_prefix = String::from_str(env, "ipfs://");
         let https_prefix = String::from_str(env, "https://");
-        
+
         // Simple validation: check if the URI has a reasonable length and starts with valid prefix
         // We can't do complex string operations in no_std, so we do basic checks
         if uri.len() < 8 {
             return Err(NftError::InvalidMetadataUri);
         }
-        
+
         // For now, we accept any non-empty URI with reasonable length
         // More sophisticated validation would require string comparison which is limited in no_std
         Ok(())
@@ -558,10 +558,8 @@ impl RemittanceNFT {
 
         env.storage().persistent().set(&metadata_key, &metadata);
         Self::bump_persistent_ttl(&env, &metadata_key);
-        env.events().publish(
-            (symbol_short!("UriUpd"), user),
-            new_metadata_uri,
-        );
+        env.events()
+            .publish((symbol_short!("UriUpd"), user), new_metadata_uri);
 
         Ok(())
     }

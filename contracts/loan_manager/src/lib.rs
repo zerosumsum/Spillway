@@ -1479,13 +1479,13 @@ impl LoanManager {
                 .checked_sub(total_debt)
                 .expect("collateral surplus underflow");
             let liquidator_bonus = configured_bonus.min(collateral_surplus);
-            
+
             // Additional safety check: ensure bonus never exceeds remaining collateral
             debug_assert!(
                 liquidator_bonus <= collateral_amount,
                 "Liquidation bonus exceeds collateral amount"
             );
-            
+
             let borrower_refund = collateral_surplus
                 .checked_sub(liquidator_bonus)
                 .expect("borrower refund underflow");
